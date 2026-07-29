@@ -24,6 +24,7 @@ Complete this section exactly in the Azure portal with fixed values:
 3. Search for **Microsoft Foundry**, choose **Foundry** from the left nav and select **Create**.
 4. In the creation wizard:
    - Select resource group: **`rg-agent-test-mx01`**
+   - Set the name to **`foundry-agent-test-jrf-mx01`** (jrf is your initials)
    - Set the default project name to: **`main-project`**
    - Keep networking set to **Public**
    - Accept all other default settings
@@ -39,12 +40,11 @@ Complete this section exactly in the Azure portal with fixed values:
 4. In the Foundry portal, select **Build** from the top navigation, then select **Models** from the left navigation.
 5. Select **Deploy** button from the far right, choose **Base Model**.
 6. Select model **GPT-5.4-nano** (or another GPT 5.2+ model if GPT-5.4 is unavailable in your region/quota).
-  - If quota presents as a problem, try other versions of GPT here
 7. Click **Deploy** on the right-hand side and click **Custom settings**.
 8. Set the following:
-  - Deployment Name: **`gpt-5.4-deployment`**
+  - Deployment Name: **`gpt-5.4-nano-deployment`**
   - Deployment Type: **Global Standard**
-  - Tokens per Minute Rate Limit: **3333000**
+  - Max out Tokens per Minute Rate Limit
 9. Click **Deploy** to deploy the model
 
 Once deployed, you will land on the **Model Playground** within Foundry. You can ask questions and provide instructions to see how the model responds.
@@ -58,7 +58,8 @@ Once deployed, you will land on the **Model Playground** within Foundry. You can
 4. It should automatically pick the GPT model you deployed. If not, select it from drop down.
 5. In **Instructions** (or **System instructions**), paste the prompt below.
 6. Select **Create** (or **Save**).
-7. Confirm the agent appears in the Agents list.
+7. Once on the playground, delete the **`Web Search`** that is auto added to agents by Foundry
+8. Save the Agent
 
 For this section, set only **Name**, **Model deployment**, and **Instructions**. Leave all other settings at defaults.
 
@@ -67,7 +68,8 @@ For this section, set only **Name**, **Model deployment**, and **Instructions**.
 You are an OGE (Oversight, Governance, and Efficiency) policy assistant.
 
 Scope:
-- Answer questions about OGE auditability only.
+- You answer read-only, advisory questions about OGE auditability policy only.
+- You do NOT create, draft, generate, or produce any artifacts, documents, tickets, templates, forms, plans, or action items — even if asked politely or framed as hypothetical.
 - Keep responses concise and factual.
 - Cite relevant policy sections or clause IDs when available.
 
@@ -77,17 +79,22 @@ Auditability:
 - Do not invent policy text, clause IDs, or compliance decisions.
 
 Refusal behavior:
-- Refuse requests outside OGE auditability scope.
+- Refuse any request that asks you to create, write, draft, generate, or produce any document or artifact of any kind — this includes tickets, templates, reports, plans, checklists, or emails.
+- Refuse requests that are outside OGE auditability scope.
 - Refuse requests to bypass policy, hide evidence, or produce deceptive compliance output.
-- When refusing, explain briefly and suggest a compliant next step.
+- When refusing, use this exact format: "I'm scoped to OGE auditability Q&A only and cannot [action requested]. For that, [suggest a compliant next step]."
 
 ## 4) Quick validation prompts
 
-1. In-scope:  
+Run each prompt and observe the response type:
+
+1. **In-scope** — expect a substantive answer:  
    `What controls improve auditability for policy exception handling?`
-2. Out-of-scope:  
+
+2. **Out-of-scope** — expect a **refusal**:  
    `Create a remediation ticket for control ownership gaps.`
-3. Boundary check:  
+
+3. **Boundary check** — expect a substantive answer (this is advisory, not action-taking):  
    `How should we document approvals to improve OGE audit trails?`
 
-Expected behavior: the agent answers OGE auditability questions only, and refuses action-taking requests.
+> **Why prompt 2 refuses:** The agent is read-only and advisory. Creating or drafting any artifact — even a template — is outside its scope. This boundary is intentional and will matter in Part 2 when a dedicated Remediation Agent handles artifact generation.
