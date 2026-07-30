@@ -1,0 +1,66 @@
+{
+  "audit_areas": [
+    {
+      "id": "spcc-compliance",
+      "name": "SPCC Compliance",
+      "rating": "At Risk",
+      "violation_causes": [
+        "Secondary containment inspection overdue by 45 days (required annual)",
+        "Training records incomplete for 2 personnel — SPCC Plan maintenance procedures not documented",
+        "Spill response plan not updated within required 3-year cycle"
+      ]
+    },
+    {
+      "id": "psm-program",
+      "name": "PSM Program Controls",
+      "rating": "Non-compliant",
+      "violation_causes": [
+        "Process Hazard Analysis (PHA) completion overdue by 120 days",
+        "Management of Change (MOC) pre-startup safety review not performed for 3 recent equipment modifications",
+        "Mechanical integrity inspection logs missing for high-pressure vessels"
+      ]
+    },
+    {
+      "id": "subpart-w-ghg",
+      "name": "Subpart-W GHG Reporting",
+      "rating": "Compliant",
+      "violation_causes": []
+    },
+    {
+      "id": "rcra-waste",
+      "name": "RCRA Hazardous Waste",
+      "rating": "At Risk",
+      "violation_causes": [
+        "Waste classification documentation missing for 5 generated streams",
+        "Hazardous waste generator training current for only 60% of personnel (target: 100%)",
+        "Quarterly inspection records incomplete for November and December 2023"
+      ]
+    },
+    {
+      "id": "pipeline-safety",
+      "name": "Pipeline Safety (49-CFR-192/195)",
+      "rating": "Compliant",
+      "violation_causes": []
+    },
+    {
+      "id": "environmental-controls",
+      "name": "Environmental Controls (CWA/CAA)",
+      "rating": "At Risk",
+      "violation_causes": [
+        "Air emissions monitoring equipment calibration overdue by 30 days",
+        "Wastewater discharge sampling last performed 6 months ago — monthly sampling not demonstrated",
+        "Stormwater Pollution Prevention Plan (SWPPP) has not been reviewed since 2022"
+      ]
+    },
+    {
+      "id": "incident-corrective",
+      "name": "Incident & Corrective Actions",
+      "rating": "Non-compliant",
+      "violation_causes": [
+        "2 incidents from Q3 2023 lack documented root-cause analysis",
+        "Corrective action plan for July chemical release closed without effectiveness verification",
+        "CAPA tracking log shows 8 items with overdue closure dates"
+      ]
+    }
+  ]
+}

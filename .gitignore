@@ -2,3 +2,5 @@
 .venv/
 *.pyc
 __pycache__/
+src/mcp/bin/
+src/mcp/obj/
