@@ -116,27 +116,27 @@ Note both connection names — you will reference them when updating the orchest
 
 ### 2) Verify the agent card
 
-Confirm that Foundry is serving the agent card before proceeding.
+Confirm that Foundry is serving the agent card for both agents before proceeding.
+
+Run `scripts/verify-agent-card.ps1` once per agent:
 
 ```powershell
-$FoundryName   = "YOUR_FOUNDRY_ACCOUNT_NAME"
-$RG            = "YOUR_RESOURCE_GROUP"
-$ProjectName   = "YOUR_PROJECT_NAME"
-$AgentName     = "audit-status-agent"
-
-$accountEndpoint = az cognitiveservices account show `
-    --name $FoundryName --resource-group $RG --query "properties.endpoint" -o tsv
-$projectEndpoint = $accountEndpoint.TrimEnd('/') + "/api/projects/$ProjectName"
-$token = az account get-access-token --resource https://ai.azure.com --query accessToken -o tsv
-
-Invoke-RestMethod `
-    -Method Get `
-    -Uri "$projectEndpoint/agents/$AgentName/endpoint/protocols/a2a/agentCard/v1.0" `
-    -Headers @{ Authorization = "Bearer $token" }
+.\scripts\verify-agent-card.ps1 `
+    -FoundryName       "YOUR_FOUNDRY_ACCOUNT_NAME" `
+    -ResourceGroupName "YOUR_RESOURCE_GROUP" `
+    -ProjectName       "YOUR_PROJECT_NAME" `
+    -AgentName         "audit-status-agent"
 ```
 
-**Expected result:** A JSON response containing the agent card with the description and skills you configured.
+```powershell
+.\scripts\verify-agent-card.ps1 `
+    -FoundryName       "YOUR_FOUNDRY_ACCOUNT_NAME" `
+    -ResourceGroupName "YOUR_RESOURCE_GROUP" `
+    -ProjectName       "YOUR_PROJECT_NAME" `
+    -AgentName         "policy-audit-info-agent"
+```
 
+**Expected result:** Each run prints the agent's name, description, version, and skills. Confirm the `description` field matches what you passed to `enable-a2a.ps1` — this is what the orchestrator will read when deciding how to route requests.
 ---
 
 ### 3) Test the A2A endpoint
