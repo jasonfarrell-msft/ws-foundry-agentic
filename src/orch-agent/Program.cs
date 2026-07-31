@@ -29,8 +29,22 @@ if (config.A2aConnectionNames is { Count: > 0 })
 {
     foreach (var connName in config.A2aConnectionNames)
     {
-        var conn = projectClient.Connections.GetConnection(connName);
-        a2aTools.Add(new A2APreviewTool { ProjectConnectionId = conn.Id });
+        try
+        {
+            var conn = projectClient.Connections.GetConnection(connName);
+            a2aTools.Add(new A2APreviewTool { ProjectConnectionId = conn.Id });
+            Console.WriteLine($"[A2A] Loaded connection '{connName}': {conn.Id}");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"[WARNING] Failed to load A2A connection '{connName}': {ex.Message}");
+            Console.WriteLine($"[WARNING] The agent will start, but A2A routing to '{connName}' will fail until the connection exists.");
+        }
+    }
+    
+    if (a2aTools.Count == 0 && config.A2aConnectionNames.Count > 0)
+    {
+        Console.WriteLine($"[WARNING] No A2A connections were successfully loaded. Check that enable-a2a.ps1 has been run for all agents.");
     }
 }
 
