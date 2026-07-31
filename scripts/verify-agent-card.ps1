@@ -38,6 +38,20 @@ $ErrorActionPreference = "Stop"
 
 $az = Get-Command az -ErrorAction Stop
 
+function Get-CardPropertyValue {
+    param(
+        [Parameter(Mandatory)]$Object,
+        [Parameter(Mandatory)][string]$Name
+    )
+
+    $property = $Object.PSObject.Properties[$Name]
+    if ($null -eq $property) {
+        return $null
+    }
+
+    return $property.Value
+}
+
 # ---------------------------------------------------------------------------
 # Resolve project endpoint
 # ---------------------------------------------------------------------------
@@ -85,17 +99,53 @@ catch {
 # ---------------------------------------------------------------------------
 # Display key fields
 # ---------------------------------------------------------------------------
+$cardName = Get-CardPropertyValue -Object $card -Name "name"
+$cardDescription = Get-CardPropertyValue -Object $card -Name "description"
+$cardVersion = Get-CardPropertyValue -Object $card -Name "version"
+$cardPropertyNames = @($card.PSObject.Properties.Name)
+$protocol = $null
+
+if ($cardPropertyNames -contains "protocolVersion") {
+    $protocol = $card.protocolVersion
+}
+elseif ($cardPropertyNames -contains "supportedInterfaces") {
+    $interfaces = @(Get-CardPropertyValue -Object $card -Name "supportedInterfaces")
+    if ($interfaces.Count -gt 0) {
+        $protocol = ($interfaces | ForEach-Object {
+            $binding = Get-CardPropertyValue -Object $_ -Name "protocolBinding"
+            $version = Get-CardPropertyValue -Object $_ -Name "protocolVersion"
+
+            if (-not [string]::IsNullOrWhiteSpace([string]$binding) -and -not [string]::IsNullOrWhiteSpace([string]$version)) {
+                "$binding $version"
+            }
+            elseif (-not [string]::IsNullOrWhiteSpace([string]$version)) {
+                $version
+            }
+            elseif (-not [string]::IsNullOrWhiteSpace([string]$binding)) {
+                $binding
+            }
+        }) -join ", "
+    }
+}
+
+$skills = @()
+if ($cardPropertyNames -contains "skills") {
+    $skills = @(Get-CardPropertyValue -Object $card -Name "skills")
+}
+
 Write-Host "Agent card retrieved successfully."
 Write-Host ""
-Write-Host "  Name        : $($card.name)"
-Write-Host "  Description : $($card.description)"
-Write-Host "  Version     : $($card.version)"
-Write-Host "  Protocol    : $($card.protocolVersion)"
+Write-Host "  Name        : $cardName"
+Write-Host "  Description : $cardDescription"
+Write-Host "  Version     : $cardVersion"
+if ($null -ne $protocol -and -not [string]::IsNullOrWhiteSpace([string]$protocol)) {
+    Write-Host "  Protocol    : $protocol"
+}
 Write-Host ""
 
-if ($card.skills) {
+if ($skills.Count -gt 0) {
     Write-Host "  Skills:"
-    foreach ($skill in $card.skills) {
+    foreach ($skill in $skills) {
         Write-Host "    - [$($skill.id)] $($skill.name): $($skill.description)"
     }
     Write-Host ""
