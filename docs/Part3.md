@@ -191,3 +191,139 @@ if (config.A2aConnectionNames is { Count: > 0 })
     -ResourceGroupName "YOUR_RESOURCE_GROUP" `
     -ProjectName       "YOUR_PROJECT_NAME"
 ```
+
+---
+
+## Section 3: Validate A2A Communication
+
+### Preamble
+
+Now that the orchestrator is published with A2A connections, test the routing logic in the Foundry playground. The orchestrator should:
+- Route status/compliance queries to `audit-status-agent`
+- Route policy/regulatory queries to `policy-audit-info-agent`
+- Call both agents when questions require both status and policy context
+- Refuse questions outside the audit/policy domain
+
+Use these 5 prompts to validate correct routing behavior.
+
+---
+
+### 1) Prompt: Live Compliance Status Query
+
+**Category:** Live compliance status  
+**Expected routing:** `audit-status-agent` only
+
+```
+What are our current compliance scores across all audit areas? Which areas are non-compliant?
+```
+
+**Validation checklist:**
+- ✅ Orchestrator routes to `audit-status-agent`
+- ✅ Response includes scorecard ratings across 7 audit areas
+- ✅ Response identifies non-compliant areas
+- ✅ No citations to knowledge base (those come from policy-audit-info-agent)
+
+---
+
+### 2) Prompt: Regulatory Requirements Query
+
+**Category:** Regulatory requirements and audit evidence  
+**Expected routing:** `policy-audit-info-agent` only
+
+```
+What does 40 CFR Part 80 require for fuel quality testing, and what evidence do we need for an audit?
+```
+
+**Validation checklist:**
+- ✅ Orchestrator routes to `policy-audit-info-agent`
+- ✅ Response includes citations from the knowledge base
+- ✅ Response describes required audit evidence
+- ✅ No live scorecard data (that comes from audit-status-agent)
+
+---
+
+### 3) Prompt: Combined Status + Regulation Query
+
+**Category:** Finding plus regulation explanation  
+**Expected routing:** Both agents
+
+```
+Our compliance score for fuel quality testing is red. What specific regulation requirement are we failing to meet, and what evidence should we gather to close this gap?
+```
+
+**Validation checklist:**
+- ✅ Orchestrator calls both agents
+- ✅ Response includes current status from `audit-status-agent` (red compliance score)
+- ✅ Response includes regulatory requirement from `policy-audit-info-agent` (with citations)
+- ✅ Response synthesizes both into actionable remediation steps
+
+---
+
+### 4) Prompt: Out of Scope Query
+
+**Category:** Question outside audit/policy domain  
+**Expected routing:** Neither agent (refusal)
+
+```
+How do I set up a Python Flask web server?
+```
+
+**Validation checklist:**
+- ✅ Orchestrator recognizes this is outside the audit/policy domain
+- ✅ Response is "I cannot answer this question" or equivalent
+- ✅ No hallucinated answers from either sub-agent
+- ✅ No speculative technical content
+
+---
+
+### 5) Prompt: Complex Compliance Validation
+
+**Category:** Multi-step compliance finding + regulatory burden  
+**Expected routing:** Both agents
+
+```
+We have a finding in the Environmental Compliance area. What root-cause violations are driving this finding, and per EPA regulations, what documentation must we submit to demonstrate remediation?
+```
+
+**Validation checklist:**
+- ✅ Orchestrator calls `audit-status-agent` (root-cause violations in Environmental Compliance)
+- ✅ Orchestrator calls `policy-audit-info-agent` (EPA regulatory documentation requirements)
+- ✅ Response connects the finding to the specific regulatory burden
+- ✅ Response is grounded in real data, not speculation
+
+---
+
+### Troubleshooting
+
+If a prompt does not route correctly:
+
+1. **Verify both A2A connections are active:**
+
+```powershell
+.\scripts\verify-agent-card.ps1 `
+    -FoundryName       "YOUR_FOUNDRY_ACCOUNT_NAME" `
+    -ResourceGroupName "YOUR_RESOURCE_GROUP" `
+    -ProjectName       "YOUR_PROJECT_NAME" `
+    -AgentName         "audit-status-agent"
+
+.\scripts\verify-agent-card.ps1 `
+    -FoundryName       "YOUR_FOUNDRY_ACCOUNT_NAME" `
+    -ResourceGroupName "YOUR_RESOURCE_GROUP" `
+    -ProjectName       "YOUR_PROJECT_NAME" `
+    -AgentName         "policy-audit-info-agent"
+```
+
+2. **Verify connection names in `orchestrator-agent.json` match the names printed by `enable-a2a.ps1`** (defaults to `<agent-name>-a2a`).
+
+3. **Check the orchestrator routing instructions in Foundry:**
+   - Open the orchestrator agent
+   - Confirm the system prompt contains the routing rules
+   - If instructions are unclear, simplify and republish
+
+4. **Review sub-agent card descriptions:**
+   - Run `verify-agent-card.ps1` to see what descriptions the orchestrator reads
+   - Descriptions should be routing-intent-aware
+
+---
+
+**Expected result:** All 5 prompts validate correctly, demonstrating A2A communication between the orchestrator and both sub-agents.
