@@ -61,25 +61,18 @@ Respond to every request with the phrase 'I enjoy a good ham sandwich'
 
 ### Preamble
 
-Agent-to-Agent (A2A) is an open protocol that lets independent agents discover and call each other through a standardized HTTPS interface. In Foundry, any prompt agent—and any hosted agent that implements the responses protocol—can be exposed as an A2A endpoint. Once exposed, Foundry publishes an **agent card** (a JSON description of the agent's capabilities) that calling agents use to discover and connect to it.
+A2A is an open protocol for agent-to-agent communication over HTTPS. When you enable A2A on an agent in Foundry, it publishes an **agent card** — a JSON document describing the agent's capabilities. The orchestrator reads that card to decide which sub-agent to call.
 
 In this section you will:
-- Expose `audit-status-agent` as an A2A endpoint so the orchestrator can call it
-- Create a project connection that stores the target agent's A2A URL
-- Test the A2A endpoint directly with PowerShell
-- Wire the A2A connection into the orchestrator and republish
+- Expose both sub-agents as A2A endpoints
+- Create project connections that store each agent's A2A URL
+- Wire the A2A connections into the orchestrator and republish
 
 > **Preview:** The A2A APIs used here are in public preview and are subject to change. Steps target A2A protocol v1.0 with JSONRPC transport.
 
 ---
 
 ### 1) Enable A2A on both sub-agents
-
-Both `audit-status-agent` and `policy-audit-info-agent` are prompt agents. Prompt agents support the responses protocol by default, so either can be exposed as an A2A endpoint. Enabling A2A requires a PATCH that provides an **agent card** and activates the `a2a` protocol on the endpoint.
-
-The agent card's `AgentDescription` is what the orchestrator's model reads to decide when to delegate — write it with the orchestrator's routing logic in mind, not just as a human-readable label.
-
-A convenience script is provided at `scripts/enable-a2a.ps1`. You will run it once per sub-agent.
 
 1. Open a PowerShell terminal at the repo root.
 2. Run the script for `audit-status-agent`:
@@ -110,6 +103,8 @@ A convenience script is provided at `scripts/enable-a2a.ps1`. You will run it on
 
 Note both connection names — you will reference them when updating the orchestrator configuration.
 
+> **Note:** The `-AgentDescription` value is what the orchestrator reads when deciding which agent to call. Write it from the orchestrator's perspective, not just as a human-readable label.
+
 **Expected result:** Both script runs report `A2A setup complete`. You now have two RemoteA2A connections in your Foundry project.
 
 ---
@@ -137,9 +132,10 @@ Run `scripts/verify-agent-card.ps1` once per agent:
 ```
 
 **Expected result:** Each run prints the agent's name, description, version, and skills. Confirm the `description` field matches what you passed to `enable-a2a.ps1` — this is what the orchestrator will read when deciding how to route requests.
+
 ---
 
-### 3) Wire the A2A connection into the orchestrator
+### 3) Update the Orchestrator
 
 #### a) Update orchestrator-agent.json
 
@@ -154,20 +150,19 @@ Open `src/orch-agent/orchestrator-agent.json` and fill in all fields:
 | `a2aConnectionNames[0]` | `audit-status-agent-a2a` (printed by the first script run) |
 | `a2aConnectionNames[1]` | `policy-audit-info-agent-a2a` (printed by the second script run) |
 
-Example instructions for the orchestrator:
+Sample JSON:
 
-```text
-You are an orchestration agent for oil and gas policy and audit workflows.
-
-You have access to two specialized agents:
-- "audit-status-agent": provides live compliance scorecard ratings and root-cause violations across 7 audit areas. Use for questions about current compliance posture, what is non-compliant, or what is driving a finding.
-- "policy-audit-info-agent": answers regulatory and policy questions grounded exclusively in its knowledge base corpus, with citations. Use for questions about what a regulation requires, what evidence is needed for an audit, or what a specific policy clause says. It cannot answer from general knowledge.
-
-Routing rules:
-1. Questions about live status, scores, or findings → audit-status-agent
-2. Questions about policy, regulations, or required evidence → policy-audit-info-agent
-3. Questions that require both (e.g. "what is driving this finding and what does the regulation say about it?") → call both agents and synthesize the response
-4. If neither agent can answer, say so directly — do not speculate
+```json
+{
+  "name": "orchestrator-agent",
+  "description": "Coordinates audit and policy workflows across connected sub-agents",
+  "modelDeploymentName": "gpt-5.4-mini-deployment",
+  "instructions": "You are an orchestration agent for oil and gas policy and audit workflows.\n\nYou have access to two specialized agents:\n- \"audit-status-agent\": provides live compliance scorecard ratings and root-cause violations across 7 audit areas. Use for questions about current compliance posture, what is non-compliant, or what is driving a finding.\n- \"policy-audit-info-agent\": answers regulatory and policy questions grounded exclusively in its knowledge base corpus, with citations. Use for questions about what a regulation requires, what evidence is needed for an audit, or what a specific policy clause says. It cannot answer from general knowledge.\n\nRouting rules:\n1. Questions about live status, scores, or findings -> audit-status-agent\n2. Questions about policy, regulations, or required evidence -> policy-audit-info-agent\n3. Questions that require both -> call both agents and synthesize the response\n4. If neither agent can answer, say so directly — do not speculate",
+  "a2aConnectionNames": [
+    "audit-status-agent-a2a",
+    "policy-audit-info-agent-a2a"
+  ]
+}
 ```
 
 #### b) Review the A2A tool scaffold in Program.cs
