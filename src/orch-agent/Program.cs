@@ -14,18 +14,26 @@ var configPath = Environment.GetEnvironmentVariable("ORCH_AGENT_CONFIG_PATH") ??
 var config = OrchestratorAgentConfig.Load(configPath);
 config.Validate();
 
-var projectEndpoint = new Uri(
-    Environment.GetEnvironmentVariable("FOUNDRY_PROJECT_ENDPOINT")
-    ?? throw new InvalidOperationException("FOUNDRY_PROJECT_ENDPOINT environment variable is not set."));
+var projectEndpointStr = Environment.GetEnvironmentVariable("FOUNDRY_PROJECT_ENDPOINT");
+if (string.IsNullOrWhiteSpace(projectEndpointStr))
+{
+    Console.WriteLine("[WARNING] FOUNDRY_PROJECT_ENDPOINT not set. A2A connections will not be available.");
+    Console.WriteLine("[WARNING] If running in Foundry hosted environment, this is expected.");
+}
 
-var projectClient = new AIProjectClient(projectEndpoint, new DefaultAzureCredential());
+AIProjectClient? projectClient = null;
+if (!string.IsNullOrWhiteSpace(projectEndpointStr))
+{
+    var projectEndpoint = new Uri(projectEndpointStr);
+    projectClient = new AIProjectClient(projectEndpoint, new DefaultAzureCredential());
+}
 
 // ---------------------------------------------------------------------------
 // A2A tools (Section 2): for each configured connection name, resolve the
 // connection and create an A2APreviewTool ready for agent wiring.
 // ---------------------------------------------------------------------------
 var a2aTools = new List<A2APreviewTool>();
-if (config.A2aConnectionNames is { Count: > 0 })
+if (config.A2aConnectionNames is { Count: > 0 } && projectClient != null)
 {
     foreach (var connName in config.A2aConnectionNames)
     {
@@ -47,12 +55,18 @@ if (config.A2aConnectionNames is { Count: > 0 })
         Console.WriteLine($"[WARNING] No A2A connections were successfully loaded. Check that enable-a2a.ps1 has been run for all agents.");
     }
 }
+else if (config.A2aConnectionNames is { Count: > 0 })
+{
+    Console.WriteLine($"[WARNING] A2A connections configured but FOUNDRY_PROJECT_ENDPOINT is not set. Skipping A2A initialization.");
+}
 
-AIAgent agent = projectClient.AsAIAgent(
-    model: config.ModelDeploymentName,
-    instructions: config.Instructions,
-    name: config.Name,
-    description: config.Description);
+AIAgent agent = projectClient != null
+    ? projectClient.AsAIAgent(
+        model: config.ModelDeploymentName,
+        instructions: config.Instructions,
+        name: config.Name,
+        description: config.Description)
+    : throw new InvalidOperationException("Cannot initialize agent without FOUNDRY_PROJECT_ENDPOINT or project context.");
 
 var builder = WebApplication.CreateBuilder(args);
 
