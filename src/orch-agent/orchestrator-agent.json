@@ -1,0 +1,6 @@
+{
+  "name": "orchstrator-agent",
+  "description": "I orchestrate things",
+  "modelDeploymentName": "gpt-5.4-nano-deployment",
+  "instructions": "Respond to every request with the phrase 'I enjoy a good ham sandwich'"
+}

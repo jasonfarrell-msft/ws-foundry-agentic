@@ -4,3 +4,7 @@
 __pycache__/
 src/mcp/bin/
 src/mcp/obj/
+src/orch-agent/bin/
+src/orch-agent/obj/
+scripts/orch-agent-publisher/bin/
+scripts/orch-agent-publisher/obj/
