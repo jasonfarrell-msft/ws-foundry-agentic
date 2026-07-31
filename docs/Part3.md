@@ -139,39 +139,7 @@ Run `scripts/verify-agent-card.ps1` once per agent:
 **Expected result:** Each run prints the agent's name, description, version, and skills. Confirm the `description` field matches what you passed to `enable-a2a.ps1` — this is what the orchestrator will read when deciding how to route requests.
 ---
 
-### 3) Test the A2A endpoint
-
-Send a message directly to the A2A endpoint to verify that end-to-end communication works. A2A v1.0 uses JSON-RPC.
-
-```powershell
-$a2aBaseUrl = "$projectEndpoint/agents/$AgentName/endpoint/protocols/a2a"
-
-$body = @{
-    jsonrpc = "2.0"
-    id      = [Guid]::NewGuid().ToString()
-    method  = "message/send"
-    params  = @{
-        message = @{
-            messageId = [Guid]::NewGuid().ToString()
-            role      = "user"
-            parts     = @(@{ kind = "text"; text = "What audit statuses are available?" })
-        }
-    }
-} | ConvertTo-Json -Depth 6
-
-Invoke-RestMethod `
-    -Method Post `
-    -Uri "$a2aBaseUrl`?a2a-version=1.0" `
-    -Headers @{ Authorization = "Bearer $token" } `
-    -ContentType "application/json" `
-    -Body $body
-```
-
-**Expected result:** The `audit-status-agent` responds to the request through the A2A protocol.
-
----
-
-### 4) Wire the A2A connection into the orchestrator
+### 3) Wire the A2A connection into the orchestrator
 
 #### a) Update orchestrator-agent.json
 
@@ -228,20 +196,3 @@ if (config.A2aConnectionNames is { Count: > 0 })
     -ResourceGroupName "YOUR_RESOURCE_GROUP" `
     -ProjectName       "YOUR_PROJECT_NAME"
 ```
-
----
-
-### 5) Test end-to-end
-
-1. Open [Microsoft Foundry](https://ai.azure.com).
-2. Navigate to the `orchestrator-agent` in the Agents view.
-3. Open the agent in the playground.
-4. Test a question that should route to `audit-status-agent`:
-   > *What areas are currently non-compliant and what is driving those findings?*
-5. Test a question that should route to `policy-audit-info-agent`:
-   > *What audit evidence is required to demonstrate SPCC compliance at a compressor station?*
-6. Test a question that should route to both:
-   > *Our Subpart-W area is non-compliant — what does the regulation require and what evidence should we be collecting?*
-7. Confirm the orchestrator delegates appropriately in each case and synthesizes the responses.
-
-**Expected result:** The orchestrator routes each question to the correct sub-agent (or both), and returns a coherent answer that reflects the sub-agent's response. Routing decisions should be visible in the playground's tool call trace.
