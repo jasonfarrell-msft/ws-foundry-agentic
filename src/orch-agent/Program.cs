@@ -21,14 +21,17 @@ var projectEndpoint = new Uri(
 var projectClient = new AIProjectClient(projectEndpoint, new DefaultAzureCredential());
 
 // ---------------------------------------------------------------------------
-// A2A tool (Section 2): when a connection name is configured, wire the
-// A2APreviewTool so the orchestrator can delegate requests to sub-agents.
+// A2A tools (Section 2): for each configured connection name, resolve the
+// connection and create an A2APreviewTool ready for agent wiring.
 // ---------------------------------------------------------------------------
-A2APreviewTool? a2aTool = null;
-if (!string.IsNullOrWhiteSpace(config.A2aConnectionName))
+var a2aTools = new List<A2APreviewTool>();
+if (config.A2aConnectionNames is { Count: > 0 })
 {
-    var a2aConnection = projectClient.Connections.GetConnection(config.A2aConnectionName);
-    a2aTool = new A2APreviewTool { ProjectConnectionId = a2aConnection.Id };
+    foreach (var connName in config.A2aConnectionNames)
+    {
+        var conn = projectClient.Connections.GetConnection(connName);
+        a2aTools.Add(new A2APreviewTool { ProjectConnectionId = conn.Id });
+    }
 }
 
 AIAgent agent = projectClient.AsAIAgent(
@@ -64,8 +67,8 @@ internal sealed record OrchestratorAgentConfig
 
     public string Instructions { get; init; } = Placeholder;
 
-    /// <summary>Optional. Set to the RemoteA2A connection name created by enable-a2a.ps1.</summary>
-    public string? A2aConnectionName { get; init; }
+    /// <summary>Optional. One or more RemoteA2A connection names created by enable-a2a.ps1.</summary>
+    public IReadOnlyList<string>? A2aConnectionNames { get; init; }
 
     public static OrchestratorAgentConfig Load(string path)
     {
@@ -87,9 +90,10 @@ internal sealed record OrchestratorAgentConfig
         RequireValue(Description, nameof(Description));
         RequireValue(ModelDeploymentName, nameof(ModelDeploymentName));
         RequireValue(Instructions, nameof(Instructions));
-        // A2aConnectionName is optional; validate only when provided
-        if (A2aConnectionName is not null)
-            RequireValue(A2aConnectionName, nameof(A2aConnectionName));
+        // A2aConnectionNames is optional; validate only when provided
+        if (A2aConnectionNames is not null)
+            foreach (var name in A2aConnectionNames)
+                RequireValue(name, nameof(A2aConnectionNames));
     }
 
     private static void RequireValue(string value, string name)

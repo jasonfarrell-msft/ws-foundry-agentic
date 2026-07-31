@@ -3,5 +3,8 @@
   "description": "Orchestrates oil and gas policy and audit workflows across connected sub-agents",
   "modelDeploymentName": "__FILL_ME__",
   "instructions": "__FILL_ME__",
-  "a2aConnectionName": "__FILL_ME__"
+  "a2aConnectionNames": [
+    "__FILL_ME__",
+    "__FILL_ME__"
+  ]
 }

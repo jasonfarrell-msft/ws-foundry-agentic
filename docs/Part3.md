@@ -73,14 +73,16 @@ In this section you will:
 
 ---
 
-### 1) Enable A2A on the audit-status-agent
+### 1) Enable A2A on both sub-agents
 
-The `audit-status-agent` is a prompt agent, which supports the responses protocol by default and can be exposed as an A2A endpoint. Enabling A2A requires a PATCH request that provides an **agent card** and activates the `a2a` protocol on the agent's endpoint.
+Both `audit-status-agent` and `policy-audit-info-agent` are prompt agents. Prompt agents support the responses protocol by default, so either can be exposed as an A2A endpoint. Enabling A2A requires a PATCH that provides an **agent card** and activates the `a2a` protocol on the endpoint.
 
-A convenience script is provided at `scripts/enable-a2a.ps1`.
+The agent card's `AgentDescription` is what the orchestrator's model reads to decide when to delegate — write it with the orchestrator's routing logic in mind, not just as a human-readable label.
+
+A convenience script is provided at `scripts/enable-a2a.ps1`. You will run it once per sub-agent.
 
 1. Open a PowerShell terminal at the repo root.
-2. Run the script, substituting your own resource values:
+2. Run the script for `audit-status-agent`:
 
 ```powershell
 .\scripts\enable-a2a.ps1 `
@@ -88,16 +90,27 @@ A convenience script is provided at `scripts/enable-a2a.ps1`.
     -ResourceGroupName "YOUR_RESOURCE_GROUP" `
     -ProjectName       "YOUR_PROJECT_NAME" `
     -AgentName         "audit-status-agent" `
-    -AgentDescription  "Retrieves live audit status and open findings from the audit tracking system"
+    -AgentDescription  "Provides live compliance scorecard ratings across 7 audit areas and identifies root-cause violations within specific areas. Use for questions about current compliance status, non-compliant areas, or what is driving audit findings."
 ```
 
-3. The script outputs:
+3. Run it again for `policy-audit-info-agent`:
+
+```powershell
+.\scripts\enable-a2a.ps1 `
+    -FoundryName       "YOUR_FOUNDRY_ACCOUNT_NAME" `
+    -ResourceGroupName "YOUR_RESOURCE_GROUP" `
+    -ProjectName       "YOUR_PROJECT_NAME" `
+    -AgentName         "policy-audit-info-agent" `
+    -AgentDescription  "Answers policy and audit questions grounded exclusively in the connected knowledge base corpus. Returns citations and confidence ratings. Use for questions about regulatory requirements, required audit evidence, or specific policy clauses — not for live compliance status."
+```
+
+4. Each script run outputs:
    - The **A2A base URL** for the agent
-   - The **connection name** created in the project (defaults to `audit-status-agent-a2a`)
+   - The **connection name** created in the project (defaults to `<agent-name>-a2a`)
 
-Keep the connection name—you will use it when updating the orchestrator configuration.
+Note both connection names — you will reference them when updating the orchestrator configuration.
 
-**Expected result:** The script reports `A2A setup complete` and shows the A2A base URL and connection name.
+**Expected result:** Both script runs report `A2A setup complete`. You now have two RemoteA2A connections in your Foundry project.
 
 ---
 
@@ -162,7 +175,7 @@ Invoke-RestMethod `
 
 #### a) Update orchestrator-agent.json
 
-Open `src/orch-agent/orchestrator-agent.json` and fill in all four fields:
+Open `src/orch-agent/orchestrator-agent.json` and fill in all fields:
 
 | Field | Value |
 |---|---|
@@ -170,37 +183,42 @@ Open `src/orch-agent/orchestrator-agent.json` and fill in all four fields:
 | `description` | A short description of the orchestrator |
 | `modelDeploymentName` | The deployment name from Part 1 |
 | `instructions` | See example below |
-| `a2aConnectionName` | The connection name printed by the script (e.g. `audit-status-agent-a2a`) |
+| `a2aConnectionNames[0]` | `audit-status-agent-a2a` (printed by the first script run) |
+| `a2aConnectionNames[1]` | `policy-audit-info-agent-a2a` (printed by the second script run) |
 
 Example instructions for the orchestrator:
 
 ```text
 You are an orchestration agent for oil and gas policy and audit workflows.
-You have access to a connected agent called "audit-status-agent" that retrieves
-live audit status and open findings from the audit tracking system.
 
-When the user asks about audit status, open findings, compliance tracking, or
-inspection history, delegate to the audit-status-agent via the A2A connection.
-Incorporate its response and provide additional context where helpful.
+You have access to two specialized agents:
+- "audit-status-agent": provides live compliance scorecard ratings and root-cause violations across 7 audit areas. Use for questions about current compliance posture, what is non-compliant, or what is driving a finding.
+- "policy-audit-info-agent": answers regulatory and policy questions grounded exclusively in its knowledge base corpus, with citations. Use for questions about what a regulation requires, what evidence is needed for an audit, or what a specific policy clause says. It cannot answer from general knowledge.
 
-For all other questions—policy guidance, regulatory references, general
-oil and gas topics—answer directly using your own knowledge.
+Routing rules:
+1. Questions about live status, scores, or findings → audit-status-agent
+2. Questions about policy, regulations, or required evidence → policy-audit-info-agent
+3. Questions that require both (e.g. "what is driving this finding and what does the regulation say about it?") → call both agents and synthesize the response
+4. If neither agent can answer, say so directly — do not speculate
 ```
 
 #### b) Review the A2A tool scaffold in Program.cs
 
-The code already contains the A2A tool scaffold. When `a2aConnectionName` is set in the config, it resolves the connection and creates an `A2APreviewTool`:
+The code iterates `a2aConnectionNames` and creates an `A2APreviewTool` for each:
 
 ```csharp
-A2APreviewTool? a2aTool = null;
-if (!string.IsNullOrWhiteSpace(config.A2aConnectionName))
+var a2aTools = new List<A2APreviewTool>();
+if (config.A2aConnectionNames is { Count: > 0 })
 {
-    var a2aConnection = projectClient.Connections.GetConnection(config.A2aConnectionName);
-    a2aTool = new A2APreviewTool { ProjectConnectionId = a2aConnection.Id };
+    foreach (var connName in config.A2aConnectionNames)
+    {
+        var conn = projectClient.Connections.GetConnection(connName);
+        a2aTools.Add(new A2APreviewTool { ProjectConnectionId = conn.Id });
+    }
 }
 ```
 
-> **Note:** `A2APreviewTool` is currently wired for agent definition creation. If the version of the hosting SDK you have installed does not forward the tool through `AsAIAgent()`, you may need to use the toolbox-based pattern described in the [Microsoft Foundry A2A docs](https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/tools/agent-to-agent?tabs=csharp). The variable `a2aTool` is deliberately left ready for that wiring.
+> **Note:** `A2APreviewTool` is currently wired for agent definition creation. If the version of the hosting SDK you have installed does not forward tools through `AsAIAgent()`, you may need to use the toolbox-based pattern described in the [Microsoft Foundry A2A docs](https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/tools/agent-to-agent?tabs=csharp). The `a2aTools` list is deliberately left ready for that wiring.
 
 #### c) Republish the orchestrator
 
@@ -218,8 +236,12 @@ if (!string.IsNullOrWhiteSpace(config.A2aConnectionName))
 1. Open [Microsoft Foundry](https://ai.azure.com).
 2. Navigate to the `orchestrator-agent` in the Agents view.
 3. Open the agent in the playground.
-4. Ask a question that should route to `audit-status-agent`, for example:
-   > *What are the current open audit findings?*
-5. Confirm the orchestrator delegates to `audit-status-agent` via A2A and returns a combined answer.
+4. Test a question that should route to `audit-status-agent`:
+   > *What areas are currently non-compliant and what is driving those findings?*
+5. Test a question that should route to `policy-audit-info-agent`:
+   > *What audit evidence is required to demonstrate SPCC compliance at a compressor station?*
+6. Test a question that should route to both:
+   > *Our Subpart-W area is non-compliant — what does the regulation require and what evidence should we be collecting?*
+7. Confirm the orchestrator delegates appropriately in each case and synthesizes the responses.
 
-**Expected result:** The orchestrator routes the request to `audit-status-agent` via the A2A connection and returns the audit status data as part of its response.
+**Expected result:** The orchestrator routes each question to the correct sub-agent (or both), and returns a coherent answer that reflects the sub-agent's response. Routing decisions should be visible in the playground's tool call trace.
