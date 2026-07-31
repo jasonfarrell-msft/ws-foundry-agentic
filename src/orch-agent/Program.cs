@@ -20,6 +20,17 @@ var projectEndpoint = new Uri(
 
 var projectClient = new AIProjectClient(projectEndpoint, new DefaultAzureCredential());
 
+// ---------------------------------------------------------------------------
+// A2A tool (Section 2): when a connection name is configured, wire the
+// A2APreviewTool so the orchestrator can delegate requests to sub-agents.
+// ---------------------------------------------------------------------------
+A2APreviewTool? a2aTool = null;
+if (!string.IsNullOrWhiteSpace(config.A2aConnectionName))
+{
+    var a2aConnection = projectClient.Connections.GetConnection(config.A2aConnectionName);
+    a2aTool = new A2APreviewTool { ProjectConnectionId = a2aConnection.Id };
+}
+
 AIAgent agent = projectClient.AsAIAgent(
     model: config.ModelDeploymentName,
     instructions: config.Instructions,
@@ -53,6 +64,9 @@ internal sealed record OrchestratorAgentConfig
 
     public string Instructions { get; init; } = Placeholder;
 
+    /// <summary>Optional. Set to the RemoteA2A connection name created by enable-a2a.ps1.</summary>
+    public string? A2aConnectionName { get; init; }
+
     public static OrchestratorAgentConfig Load(string path)
     {
         if (!File.Exists(path))
@@ -73,6 +87,9 @@ internal sealed record OrchestratorAgentConfig
         RequireValue(Description, nameof(Description));
         RequireValue(ModelDeploymentName, nameof(ModelDeploymentName));
         RequireValue(Instructions, nameof(Instructions));
+        // A2aConnectionName is optional; validate only when provided
+        if (A2aConnectionName is not null)
+            RequireValue(A2aConnectionName, nameof(A2aConnectionName));
     }
 
     private static void RequireValue(string value, string name)

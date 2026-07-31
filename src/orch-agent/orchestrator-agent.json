@@ -1,6 +1,7 @@
 {
-  "name": "orchstrator-agent",
-  "description": "I orchestrate things",
-  "modelDeploymentName": "gpt-5.4-nano-deployment",
-  "instructions": "Respond to every request with the phrase 'I enjoy a good ham sandwich'"
+  "name": "orchestrator-agent",
+  "description": "Orchestrates oil and gas policy and audit workflows across connected sub-agents",
+  "modelDeploymentName": "__FILL_ME__",
+  "instructions": "__FILL_ME__",
+  "a2aConnectionName": "__FILL_ME__"
 }
