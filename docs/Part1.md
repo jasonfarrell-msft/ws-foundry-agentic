@@ -7,9 +7,9 @@ Set up the base environment for the workshop:
 - Deploy a **GPT-5.4** model deployment
 - Create the **`policy-audit-info-agent`** — a read-only, advisory agent that answers OGE audit and policy questions
 
-This agent will be grounded in a corpus of policy documents in Part 2 using **Foundry IQ**. For now, it runs on the model's built-in knowledge so you can validate its behavior and scope boundaries before attaching a knowledge base.
+This agent is grounded in a corpus of policy documents using **Foundry IQ**. Part 2 adds the second specialist, and Part 3 combines both specialists behind an A2A prompt orchestrator.
 
-This part does **not** include tool calling, knowledge bases, multi-agent routing, or actions.
+This part does not include MCP tool calling or multi-agent routing.
 
 ### 1) Create Microsoft Foundry resource and project
 
@@ -30,6 +30,14 @@ Complete this section exactly in the Azure portal with fixed values:
    - Keep networking set to **Public**
    - Accept all other default settings
 5. Complete the wizard and wait for deployment to finish.
+
+### A2A access prerequisite for later parts
+
+Part 3 creates an orchestrator that calls Foundry agents through A2A. Incoming A2A endpoints use Microsoft Entra authentication, and the calling agent identity must have the **Foundry Agent Consumer** role on the target Foundry project.
+
+The calling identity is created when the orchestrator agent is created and may not be visible until the agent is published. Do not guess a principal ID or run a role-assignment command yet. In Part 3, identify the orchestrator's agent identity and have a platform owner grant it **Foundry Agent Consumer** access to `main-project` before testing A2A calls.
+
+> If all workshop agents are created in `main-project`, `main-project` is the target project scope for this lab.
 
 ## 2) Deploy GPT-5.4 model
 
@@ -61,8 +69,8 @@ This agent is the first specialist in the workshop's multi-agent system. Its rol
 5. It should automatically pick the GPT model you deployed. If not, select it from the dropdown.
 6. In **Instructions** (or **System instructions**), enter your policy and audit guidance prompt.
 7. Select **Create** (or **Save**).
-8. Once on the playground, delete the **`Web Search`** tool that is auto-added by Foundry.
-9. Save the agent.
+8. Once on the playground, delete the **`Web Search`** tool that is auto-added by Foundry. It is not used in this workshop.
+9. Save the agent or allow the portal to auto-save the change.
 
 For this section, set only **Name**, **Model deployment**, and **Instructions**. Leave all other settings at defaults.
 

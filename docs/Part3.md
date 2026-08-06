@@ -1,119 +1,68 @@
-# Part 3: Agent-to-Agent (A2A) Orchestration
+# Part 3: Agent-to-Agent (A2A) Orchestration with a Prompt Orchestrator
 
-## Section 1: Define the Hosted Orchestrator Agent
+## Objective
 
-### Preamble
+Create a **prompt orchestrator agent in Foundry** that routes requests to two specialized sub-agents using **A2A**:
 
-In Parts 1 and 2, you created two independent agents:
-- `policy-audit-info-agent` for policy and audit guidance
-- `audit-status-agent` for live audit status via MCP
+- `audit-status-agent` for live compliance status
+- `policy-audit-info-agent` for policy and audit requirements
 
-Each agent is useful on its own, but they operate in isolation. In this section, you will create a hosted orchestrator agent with Microsoft Agent Framework (Python would also work) that will later coordinate both agents through Agent-to-Agent (A2A) communication.
+This part focuses on prompt-agent orchestration only.
+**Hosted remediation-agent deployment is intentionally deferred to Part 4 (next module).**
 
-For now, keep the scope simple:
-- Start from the base template in `src/orch-agent`
-- Fill in the hosted agent name, description, model deployment name, and instructions
-- Publish the hosted agent to Foundry with the model you deployed earlier
+### Prerequisites & Assumptions
 
-This section ends when the hosted agent is published in Foundry. We are **not** adding A2A routing or multi-agent orchestration logic yet.
+**Assumption: Parts 1 and 2 are complete.**
 
-### 1) Open the hosted agent template
-
-1. Open the base template under `src/orch-agent`.
-2. Review the starter project structure for the hosted agent.
-3. Confirm it is configured to use the model deployment from the earlier sections.
-
-### 2) Fill in the hosted agent settings
-
-1. Open `src/orch-agent/orchestrator-agent.json`.
-2. Fill in these values:
-   - **name:** `orchestrator-agent`
-   - **description:** a short description of the hosted orchestrator agent
-   - **modelDeploymentName:** the model deployment you created earlier
-   - **instructions:** your system prompt
-
-Example system prompt:
-
-```text
-Respond to every request with the phrase 'I enjoy a good ham sandwich'
-```
-
-3. Save your changes.
-
-### 3) Publish the hosted agent to Foundry
-
-1. Run the PowerShell publish script under `scripts`.
-2. Pass `-FoundryName`, `-ResourceGroupName`, and `-ProjectName`, or provide `FOUNDRY_PROJECT_ENDPOINT` directly.
-3. Confirm the publish operation completes successfully.
-
-### 4) Verify the published hosted agent
-
-1. Open Microsoft Foundry.
-2. Confirm `orchestrator-agent` appears as a hosted agent.
-3. Verify it is using the model deployed earlier.
-4. Open the agent and test a prompt to confirm the system prompt is active.
-
-**Expected result:** The hosted orchestrator agent is published in Foundry and ready for the next section.
+- Foundry project exists and has a working model deployment
+- `audit-status-agent` and `policy-audit-info-agent` already exist
+- PowerShell 7+ is available
 
 ---
 
-## Section 2: Enable Agent-to-Agent (A2A) Communication
+## 1) Confirm both sub-agents are A2A-enabled
 
-### Preamble
+If you already completed this step earlier, rerun it to ensure configuration is still correct.
 
-A2A is an open protocol for agent-to-agent communication over HTTPS. When you enable A2A on an agent in Foundry, it publishes an **agent card** — a JSON document describing the agent's capabilities. The orchestrator reads that card to decide which sub-agent to call.
+1. Open PowerShell at the repo root.
+2. Enable A2A for `audit-status-agent`:
 
-In this section you will:
-- Expose both sub-agents as A2A endpoints
-- Create project connections that store each agent's A2A URL
-- Wire the A2A connections into the orchestrator and republish
+   ```powershell
+   .\scripts\enable-a2a.ps1 `
+       -FoundryName       "YOUR_FOUNDRY_ACCOUNT_NAME" `
+       -ResourceGroupName "YOUR_RESOURCE_GROUP" `
+       -ProjectName       "YOUR_PROJECT_NAME" `
+       -AgentName         "audit-status-agent" `
+       -AgentDescription  "Provides live compliance scorecard ratings across 7 audit areas and identifies root-cause violations within specific areas. Use for questions about current compliance status, non-compliant areas, or what is driving audit findings."
+   ```
 
-> **Preview:** The A2A APIs used here are in public preview and are subject to change. Steps target A2A protocol v1.0 with JSONRPC transport.
+   **Note the "Agent A2A base URL" printed in the output.** You'll paste this into the orchestrator's A2A Tool configuration in Step 3. The agent card URL is for verification only; do not paste it into the A2A Tool form.
 
----
+3. Enable A2A for `policy-audit-info-agent`:
 
-### 1) Enable A2A on both sub-agents
+   ```powershell
+   .\scripts\enable-a2a.ps1 `
+       -FoundryName       "YOUR_FOUNDRY_ACCOUNT_NAME" `
+       -ResourceGroupName "YOUR_RESOURCE_GROUP" `
+       -ProjectName       "YOUR_PROJECT_NAME" `
+       -AgentName         "policy-audit-info-agent" `
+       -AgentDescription  "Answers policy and audit questions grounded exclusively in the connected knowledge base corpus. Returns citations and confidence ratings. Use for questions about regulatory requirements, required audit evidence, or specific policy clauses — not for live compliance status."
+   ```
 
-1. Open a PowerShell terminal at the repo root.
-2. Run the script for `audit-status-agent`:
+   **Again, note the "Agent A2A base URL" printed in the output.** The agent card URL is for verification only.
 
-```powershell
-.\scripts\enable-a2a.ps1 `
-    -FoundryName       "YOUR_FOUNDRY_ACCOUNT_NAME" `
-    -ResourceGroupName "YOUR_RESOURCE_GROUP" `
-    -ProjectName       "YOUR_PROJECT_NAME" `
-    -AgentName         "audit-status-agent" `
-    -AgentDescription  "Provides live compliance scorecard ratings across 7 audit areas and identifies root-cause violations within specific areas. Use for questions about current compliance status, non-compliant areas, or what is driving audit findings."
-```
+4. **Record both Agent A2A base URLs** for use in Step 3. The pattern is:
+   ```
+   https://{foundry-account}.services.ai.azure.com/api/projects/{project}/agents/{agent}/endpoint/protocols/a2a
+   ```
 
-3. Run it again for `policy-audit-info-agent`:
-
-```powershell
-.\scripts\enable-a2a.ps1 `
-    -FoundryName       "YOUR_FOUNDRY_ACCOUNT_NAME" `
-    -ResourceGroupName "YOUR_RESOURCE_GROUP" `
-    -ProjectName       "YOUR_PROJECT_NAME" `
-    -AgentName         "policy-audit-info-agent" `
-    -AgentDescription  "Answers policy and audit questions grounded exclusively in the connected knowledge base corpus. Returns citations and confidence ratings. Use for questions about regulatory requirements, required audit evidence, or specific policy clauses — not for live compliance status."
-```
-
-4. Each script run outputs:
-   - The **A2A base URL** for the agent
-   - The **connection name** created in the project (defaults to `<agent-name>-a2a`)
-
-Note both connection names — you will reference them when updating the orchestrator configuration.
-
-> **Note:** The `-AgentDescription` value is what the orchestrator reads when deciding which agent to call. Write it from the orchestrator's perspective, not just as a human-readable label.
-
-**Expected result:** Both script runs report `A2A setup complete`. You now have two RemoteA2A connections in your Foundry project.
+**Expected result:** Both runs report A2A setup complete and output the base A2A endpoint and agent card URL.
 
 ---
 
-### 2) Verify the agent card
+## 2) Verify both agent cards before wiring orchestration
 
-Confirm that Foundry is serving the agent card for both agents before proceeding.
-
-Run `scripts/verify-agent-card.ps1` once per agent:
+Verify that each sub-agent is discoverable through its agent card:
 
 ```powershell
 .\scripts\verify-agent-card.ps1 `
@@ -131,199 +80,216 @@ Run `scripts/verify-agent-card.ps1` once per agent:
     -AgentName         "policy-audit-info-agent"
 ```
 
-**Expected result:** Each run prints the agent's name, description, version, and skills. Confirm the `description` field matches what you passed to `enable-a2a.ps1` — this is what the orchestrator will read when deciding how to route requests.
+Check each card for:
+
+- Correct `name`
+- Clear routing-oriented `description`
+- Skills metadata present
+
+> Do not continue until both agent cards resolve successfully.
+
+The portal does not provide a reliable connected/ready indicator for this step. The actual A2A call is validated in the orchestrator playground in Section 4.
 
 ---
 
-### 3) Update the Orchestrator
+## 3) Create the Prompt Orchestrator agent in Foundry
 
-#### a) Update orchestrator-agent.json
+1. In the Foundry portal, select **New agent** → **Build your agent**.
+2. Create a **Prompt Agent** named `orchestrator-prompt-agent`.
+3. Use your model deployment from Part 1.
+4. Set the system instructions similar to:
 
-Open `src/orch-agent/orchestrator-agent.json` and fill in all fields:
+```text
+You are an orchestration prompt agent for oil and gas policy and audit workflows.
 
-| Field | Value |
-|---|---|
-| `name` | `orchestrator-agent` |
-| `description` | A short description of the orchestrator |
-| `modelDeploymentName` | The deployment name from Part 1 |
-| `instructions` | See example below |
-| `a2aConnectionNames[0]` | `audit-status-agent-a2a` (printed by the first script run) |
-| `a2aConnectionNames[1]` | `policy-audit-info-agent-a2a` (printed by the second script run) |
+You have access to two specialized agents:
+- audit-status-agent: live compliance scorecard ratings and root-cause violations.
+- policy-audit-info-agent: policy/regulatory requirements and required audit evidence, grounded in its knowledge base with citations.
 
-Sample JSON:
+Routing rules:
+Before selecting a tool, apply this scope gate:
+1. Treat a request as in scope only when it concerns oil-and-gas policy, compliance, audits, controls, evidence, findings, scores, status, remediation, or regulatory interpretation.
+2. Treat software, coding, web-server setup, infrastructure, math, finance, and other non-audit or non-policy requests as out of scope.
+3. If a request mixes an in-scope subject with an out-of-scope task, classify the entire request as out of scope.
+4. For an out-of-scope request, do not call any tool or A2A agent. Reply exactly: `I only handle oil-and-gas policy, compliance, and audit questions.`
 
-```json
-{
-  "name": "orchestrator-agent",
-  "description": "Coordinates audit and policy workflows across connected sub-agents",
-  "modelDeploymentName": "gpt-5.4-mini-deployment",
-  "instructions": "You are an orchestration agent for oil and gas policy and audit workflows.\n\nYou have access to two specialized agents:\n- \"audit-status-agent\": provides live compliance scorecard ratings and root-cause violations across 7 audit areas. Use for questions about current compliance posture, what is non-compliant, or what is driving a finding.\n- \"policy-audit-info-agent\": answers regulatory and policy questions grounded exclusively in its knowledge base corpus, with citations. Use for questions about what a regulation requires, what evidence is needed for an audit, or what a specific policy clause says. It cannot answer from general knowledge.\n\nRouting rules:\n1. Questions about live status, scores, or findings -> audit-status-agent\n2. Questions about policy, regulations, or required evidence -> policy-audit-info-agent\n3. Questions that require both -> call both agents and synthesize the response\n4. If neither agent can answer, say so directly — do not speculate",
-  "a2aConnectionNames": [
-    "audit-status-agent-a2a",
-    "policy-audit-info-agent-a2a"
-  ]
-}
+After the scope gate passes:
+5. Questions about live status, scores, findings, or remediation status -> `audit-status-agent`
+6. Questions about policy, regulations, controls, or required evidence -> `policy-audit-info-agent`
+7. Questions requiring both operational status and regulatory interpretation -> call both and synthesize
+8. When using policy content, preserve citations
 ```
 
-#### b) Review the A2A tool scaffold in Program.cs
+### Grant the orchestrator identity A2A access
 
-The code iterates `a2aConnectionNames` and creates an `A2APreviewTool` for each:
+The A2A tool authenticates with the orchestrator's **Agent Identity**. That identity must have the **Foundry Agent Consumer** role on the target project before the tool can fetch an agent card or call a sub-agent.
 
-```csharp
-var a2aTools = new List<A2APreviewTool>();
-if (config.A2aConnectionNames is { Count: > 0 })
-{
-    foreach (var connName in config.A2aConnectionNames)
-    {
-        var conn = projectClient.Connections.GetConnection(connName);
-        a2aTools.Add(new A2APreviewTool { ProjectConnectionId = conn.Id });
-    }
-}
-```
-
-> **Note:** `A2APreviewTool` is currently wired for agent definition creation. If the version of the hosting SDK you have installed does not forward tools through `AsAIAgent()`, you may need to use the toolbox-based pattern described in the [Microsoft Foundry A2A docs](https://learn.microsoft.com/en-us/azure/foundry/agents/how-to/tools/agent-to-agent?tabs=csharp). The `a2aTools` list is deliberately left ready for that wiring.
-
-#### c) Republish the orchestrator
+After creating `orchestrator-prompt-agent`, retrieve its instance identity. Run this from PowerShell after replacing the placeholders:
 
 ```powershell
-.\scripts\publish-orch-agent.ps1 `
-    -FoundryName       "YOUR_FOUNDRY_ACCOUNT_NAME" `
-    -ResourceGroupName "YOUR_RESOURCE_GROUP" `
-    -ProjectName       "YOUR_PROJECT_NAME"
+$agent = az rest `
+    --method get `
+    --url "https://YOUR_FOUNDRY_ACCOUNT_NAME.services.ai.azure.com/api/projects/YOUR_PROJECT_NAME/agents/orchestrator-prompt-agent?api-version=v1" `
+    --resource https://ai.azure.com |
+    ConvertFrom-Json
+
+$principalId = $agent.instance_identity.principal_id
+$subscriptionId = az account show --query id -o tsv
+$projectScope = "/subscriptions/$subscriptionId/resourceGroups/YOUR_RESOURCE_GROUP/providers/Microsoft.CognitiveServices/accounts/YOUR_FOUNDRY_ACCOUNT_NAME/projects/YOUR_PROJECT_NAME"
+
+az role assignment create `
+    --role "Foundry Agent Consumer" `
+    --assignee $principalId `
+    --scope $projectScope
 ```
+
+If `instance_identity.principal_id` is not available yet, publish or activate the agent version, then retrieve the agent details again. Role assignment changes can take several minutes to propagate.
+
+### Attach A2A Tools and Connections
+
+#### Step 1: Open the Tools Panel
+In the Foundry agent editor:
+1. Click **Tools** in the left navigation menu
+2. Review the default tools listed — you should see **Web Search** enabled by default
+
+#### Step 2: Remove Web Search Tool
+Web Search is enabled by default on new prompt agents but is not needed for this workshop:
+1. Find **Web Search** in the Tools list
+2. Click the **X** or **Remove** icon next to it
+3. Confirm removal when prompted
+4. Verify that Web Search no longer appears in the Tools list
+
+#### Step 3: Add A2A Project Connections
+The A2A tool accepts the target agent's **base A2A endpoint**. Do not append the agent-card path to the endpoint URL. If the dialog exposes a card-path field, enter `agentCard/v1.0` there.
+
+1. Click the **Add** button to open the tools picker/menu
+2. Select **Add Tools**
+3. Navigate to the **Custom** tab
+4. Select **A2A**
+5. A form appears. Fill in the following:
+   - **A2A Agent Endpoint:** Paste the first **base A2A URL** (saved from Step 1):
+     ```
+     https://{foundry-account}.services.ai.azure.com/api/projects/{project}/agents/audit-status-agent/endpoint/protocols/a2a
+     ```
+   - **Auth type:** Select **Agent Identity**
+   - **Audience:** `https://ai.azure.com`
+   - **Agent card path:** `agentCard/v1.0`
+6. Click **Add** or **Confirm**
+7. Repeat steps 1–4, then fill in:
+   - **A2A Agent Endpoint:** Paste the second **base A2A URL**:
+     ```
+     https://{foundry-account}.services.ai.azure.com/api/projects/{project}/agents/policy-audit-info-agent/endpoint/protocols/a2a
+     ```
+   - **Auth type:** Select **Agent Identity**
+   - **Audience:** `https://ai.azure.com`
+   - **Agent card path:** `agentCard/v1.0`
+8. Click **Add** or **Confirm**
+
+**Note:** Replace `{foundry-account}` and `{project}` with your actual Foundry account name and project name. Use the canonical `services.ai.azure.com` host. Paste the base endpoint in the endpoint field and enter `agentCard/v1.0` in the card-path field; do not append the card path to the endpoint or use `/.well-known/agent-card.json`. **Agent Identity** uses the orchestrator agent's managed identity to authenticate to the sub-agent endpoints. Use `https://ai.azure.com` as the audience.
+
+Before testing, ensure the orchestrator's agent identity has **Foundry Agent Consumer** on `main-project`. The identity is created when the orchestrator is created and may be visible only after publishing. If you receive a 401 while fetching an agent card, treat it as an Entra/RBAC or endpoint-configuration issue, not a routing issue.
+
+> **Scope boundary:** In this part, the orchestrator is a prompt agent. Do not publish a hosted orchestrator in Part 3. Prompt agents are designed for development and testing in the Foundry portal—hosted orchestrators require additional configuration and are outside the scope of this workshop.
 
 ---
 
-## Section 3: Validate A2A Communication
+## 4) Validate routing behavior in the playground
 
-### Preamble
+Use these prompts to confirm routing decisions and synthesis behavior.
 
-Now that the orchestrator is published with A2A connections, test the routing logic in the Foundry playground. The orchestrator should:
-- Route status/compliance queries to `audit-status-agent`
-- Route policy/regulatory queries to `policy-audit-info-agent`
-- Call both agents when questions require both status and policy context
-- Refuse questions outside the audit/policy domain
+For every test, use run traces/tool invocation logs to confirm which A2A connection(s) were called.
+Response text alone is not sufficient to verify routing.
 
-Use these 5 prompts to validate correct routing behavior.
+### Prompt A: Live Compliance Status Query
 
----
+**Expected primary routing:** `audit-status-agent` (verify in trace)
 
-### 1) Prompt: Live Compliance Status Query
-
-**Category:** Live compliance status  
-**Expected routing:** `audit-status-agent` only
-
-```
+```text
 What are our current compliance scores across all audit areas? Which areas are non-compliant?
 ```
 
-**Validation checklist:**
-- ✅ Orchestrator routes to `audit-status-agent`
-- ✅ Response includes scorecard ratings across 7 audit areas
-- ✅ Response identifies non-compliant areas
-- ✅ No citations to knowledge base (those come from policy-audit-info-agent)
+Validation:
 
----
+- Response reflects live scorecard status
+- Non-compliant areas are identified
+- No policy-citation-only answer pattern
 
-### 2) Prompt: Regulatory Requirements Query
+### Prompt B: Regulatory Requirements Query
 
-**Category:** Regulatory requirements and audit evidence  
-**Expected routing:** `policy-audit-info-agent` only
+**Expected primary routing:** `policy-audit-info-agent` (verify in trace)
 
-```
-What does 40 CFR Part 80 require for fuel quality testing, and what evidence do we need for an audit?
+```text
+According to the corpus, what SPCC plan maintenance, secondary containment, and training requirements apply to a compressor station, and what audit evidence should we collect?
 ```
 
-**Validation checklist:**
-- ✅ Orchestrator routes to `policy-audit-info-agent`
-- ✅ Response includes citations from the knowledge base
-- ✅ Response describes required audit evidence
-- ✅ No live scorecard data (that comes from audit-status-agent)
+Validation:
 
----
+- Response is grounded in the corpus and includes citations
+- SPCC plan maintenance, secondary containment, and training requirements are addressed
+- Evidence includes signed SPCC plans, containment inspection records, and training rosters
+- No live scorecard or rating data is fabricated
 
-### 3) Prompt: Combined Status + Regulation Query
+### Prompt C: Combined Status + Regulation Query
 
-**Category:** Finding plus regulation explanation  
-**Expected routing:** Both agents
+**Expected primary routing:** Both agents (verify in trace)
 
-```
-Our compliance score for fuel quality testing is red. What specific regulation requirement are we failing to meet, and what evidence should we gather to close this gap?
+```text
+Our PSM Program Controls area is currently Non-compliant. What root-cause violations are driving that rating, and according to the corpus what PSM-1910.119 audit evidence should we gather?
 ```
 
-**Validation checklist:**
-- ✅ Orchestrator calls both agents
-- ✅ Response includes current status from `audit-status-agent` (red compliance score)
-- ✅ Response includes regulatory requirement from `policy-audit-info-agent` (with citations)
-- ✅ Response synthesizes both into actionable remediation steps
+Validation:
 
----
+- `audit-status-agent` supplies the current rating and root causes
+- `policy-audit-info-agent` supplies corpus-grounded PSM-1910.119 evidence with citations
+- The response connects the status findings to evidence such as PHA reports, MOC packets, and mechanical-integrity work orders or inspection records
+- No fuel-quality or unsupported regulatory claims are introduced
 
-### 4) Prompt: Out of Scope Query
+### Prompt D: Out-of-scope Query
 
-**Category:** Question outside audit/policy domain  
-**Expected routing:** Neither agent (refusal)
+**Expected primary routing:** Neither agent (refusal; verify no A2A tool call)
 
-```
+```text
 How do I set up a Python Flask web server?
 ```
 
-**Validation checklist:**
-- ✅ Orchestrator recognizes this is outside the audit/policy domain
-- ✅ Response is "I cannot answer this question" or equivalent
-- ✅ No hallucinated answers from either sub-agent
-- ✅ No speculative technical content
+Validation:
+
+- The request fails the scope gate before any routing decision
+- Neither A2A agent is called
+- The response is exactly: `I only handle oil-and-gas policy, compliance, and audit questions.`
+- No setup steps, code, speculation, or additional text is returned
+
+### Prompt E: Complex Compliance Validation
+
+**Expected primary routing:** Both agents (verify in trace)
+
+```text
+We have a finding in an environmental control area. What root-cause violations are driving this finding, and what corpus-grounded audit evidence should we gather to demonstrate remediation?
+```
+
+Validation:
+
+- Root causes come from status context
+- Audit evidence comes from policy context with citations
 
 ---
 
-### 5) Prompt: Complex Compliance Validation
+## 5) Troubleshooting
 
-**Category:** Multi-step compliance finding + regulatory burden  
-**Expected routing:** Both agents
+If routing is incorrect:
 
-```
-We have a finding in the Environmental Compliance area. What root-cause violations are driving this finding, and per EPA regulations, what documentation must we submit to demonstrate remediation?
-```
+1. Re-verify both agent cards with `verify-agent-card.ps1`.
+2. Confirm each A2A tool uses the base endpoint ending in `/endpoint/protocols/a2a`.
+3. Confirm the host is `services.ai.azure.com`, authentication is **Agent Identity**, and audience is `https://ai.azure.com`.
+4. Confirm the orchestrator identity has **Foundry Agent Consumer** on the target project.
+5. Tighten sub-agent descriptions to be routing-intent-aware.
+6. Simplify orchestrator instructions so each routing rule maps to one clear intent.
+7. Re-test with the same five prompts and inspect traces/tool invocations.
 
-**Validation checklist:**
-- ✅ Orchestrator calls `audit-status-agent` (root-cause violations in Environmental Compliance)
-- ✅ Orchestrator calls `policy-audit-info-agent` (EPA regulatory documentation requirements)
-- ✅ Response connects the finding to the specific regulatory burden
-- ✅ Response is grounded in real data, not speculation
-
----
-
-### Troubleshooting
-
-If a prompt does not route correctly:
-
-1. **Verify both A2A connections are active:**
-
-```powershell
-.\scripts\verify-agent-card.ps1 `
-    -FoundryName       "YOUR_FOUNDRY_ACCOUNT_NAME" `
-    -ResourceGroupName "YOUR_RESOURCE_GROUP" `
-    -ProjectName       "YOUR_PROJECT_NAME" `
-    -AgentName         "audit-status-agent"
-
-.\scripts\verify-agent-card.ps1 `
-    -FoundryName       "YOUR_FOUNDRY_ACCOUNT_NAME" `
-    -ResourceGroupName "YOUR_RESOURCE_GROUP" `
-    -ProjectName       "YOUR_PROJECT_NAME" `
-    -AgentName         "policy-audit-info-agent"
-```
-
-2. **Verify connection names in `orchestrator-agent.json` match the names printed by `enable-a2a.ps1`** (defaults to `<agent-name>-a2a`).
-
-3. **Check the orchestrator routing instructions in Foundry:**
-   - Open the orchestrator agent
-   - Confirm the system prompt contains the routing rules
-   - If instructions are unclear, simplify and republish
-
-4. **Review sub-agent card descriptions:**
-   - Run `verify-agent-card.ps1` to see what descriptions the orchestrator reads
-   - Descriptions should be routing-intent-aware
+If you hit hosted-runtime identity or container issues, you are in Part 4 scope; stop this part here.
 
 ---
 
-**Expected result:** All 5 prompts validate correctly, demonstrating A2A communication between the orchestrator and both sub-agents.
+## Expected result
+
+You have a working **Prompt Orchestrator** that calls both sub-agents through **A2A** and routes/synthesizes correctly for status-only, policy-only, mixed, and out-of-scope prompts.

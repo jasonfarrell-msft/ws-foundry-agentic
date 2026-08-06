@@ -1,10 +1,13 @@
+using System.Net.Http.Headers;
+using System.Text;
+using System.Text.Json;
 using Azure.AI.Projects;
+using Azure.Core;
 using Azure.Identity;
-using Azure.AI.AgentServer.Core;
 using Azure.AI.AgentServer.Responses;
-using Azure.AI.AgentServer.Responses.Models;
 using DotNetEnv;
 using Microsoft.Agents.AI;
+using Microsoft.Agents.AI.Foundry;
 using Microsoft.Agents.AI.Foundry.Hosting;
 using Microsoft.Extensions.AI;
 
@@ -13,12 +16,20 @@ Env.NoClobber().TraversePath().Load();
 var configPath = Environment.GetEnvironmentVariable("ORCH_AGENT_CONFIG_PATH") ?? "orchestrator-agent.json";
 var config = OrchestratorAgentConfig.Load(configPath);
 config.Validate();
+Console.WriteLine("[BOOT] Orchestrator startup marker: v26-a2a-auth-fix");
+Console.WriteLine($"[BOOT] FOUNDRY_HOSTING_ENVIRONMENT={Environment.GetEnvironmentVariable("FOUNDRY_HOSTING_ENVIRONMENT") ?? "(null)"}");
+Console.WriteLine($"[BOOT] FOUNDRY_AGENT_NAME={Environment.GetEnvironmentVariable("FOUNDRY_AGENT_NAME") ?? "(null)"}");
+Console.WriteLine($"[BOOT] FOUNDRY_AGENT_VERSION={Environment.GetEnvironmentVariable("FOUNDRY_AGENT_VERSION") ?? "(null)"}");
+var diagnosticsEnabled = !string.Equals(Environment.GetEnvironmentVariable("ORCH_DIAGNOSTICS"), "0", StringComparison.OrdinalIgnoreCase);
 
-var projectEndpointStr = Environment.GetEnvironmentVariable("FOUNDRY_PROJECT_ENDPOINT");
+var projectEndpointStr =
+    Environment.GetEnvironmentVariable("FOUNDRY_PROJECT_ENDPOINT")
+    ?? Environment.GetEnvironmentVariable("AZURE_AI_PROJECT_ENDPOINT")
+    ?? config.ProjectEndpoint;
 if (string.IsNullOrWhiteSpace(projectEndpointStr))
 {
-    Console.WriteLine("[WARNING] FOUNDRY_PROJECT_ENDPOINT not set. A2A connections will not be available.");
-    Console.WriteLine("[WARNING] If running in Foundry hosted environment, this is expected.");
+    Console.WriteLine("[WARNING] No project endpoint available from env or config.");
+    Console.WriteLine("[WARNING] Set FOUNDRY_PROJECT_ENDPOINT or AZURE_AI_PROJECT_ENDPOINT, or add projectEndpoint in orchestrator-agent.json.");
 }
 
 AIProjectClient? projectClient = null;
@@ -29,58 +40,280 @@ if (!string.IsNullOrWhiteSpace(projectEndpointStr))
 }
 
 // ---------------------------------------------------------------------------
-// A2A tools (Section 2): for each configured connection name, resolve the
-// connection and create an A2APreviewTool ready for agent wiring.
+// A2A tools: authenticated function tools that call sub-agents via the A2A
+// protocol (JSON-RPC 2.0 over HTTPS).
+//
+// FoundryAITool.CreateA2ATool has no credential parameter — it makes
+// unauthenticated HTTP requests and fails with 401 when calling Foundry
+// prompt agents. Instead we create standard AIFunction tools that:
+//   1. Acquire a bearer token for https://ai.azure.com using DefaultAzureCredential
+//      (picks up ManagedIdentityCredential automatically in a hosted container).
+//   2. POST the A2A message/send JSON-RPC request with the Authorization header.
+//   3. Extract and return the agent's text response.
 // ---------------------------------------------------------------------------
-var a2aTools = new List<A2APreviewTool>();
-if (config.A2aConnectionNames is { Count: > 0 } && projectClient != null)
+var a2aCredential = new DefaultAzureCredential();
+var a2aTools = new List<AITool>();
+
+if (!string.IsNullOrWhiteSpace(projectEndpointStr))
 {
-    foreach (var connName in config.A2aConnectionNames)
+    var connectionNames = config.A2aConnectionNames is { Count: > 0 }
+        ? config.A2aConnectionNames
+        : config.A2aConnectionIds?
+            .Select(id => id.Split('/').LastOrDefault())
+            .Where(n => n != null)
+            .Select(n => n!)
+            .ToList();
+
+    if (connectionNames is { Count: > 0 })
     {
-        try
+        foreach (var connName in connectionNames)
         {
-            var conn = projectClient.Connections.GetConnection(connName);
-            a2aTools.Add(new A2APreviewTool { ProjectConnectionId = conn.Id });
-            Console.WriteLine($"[A2A] Loaded connection '{connName}': {conn.Id}");
+            var agentName = connName.EndsWith("-a2a", StringComparison.OrdinalIgnoreCase)
+                ? connName[..^4]
+                : connName;
+            var a2aEndpointUrl = $"{projectEndpointStr.TrimEnd('/')}/agents/{agentName}/endpoint/protocols/a2a";
+
+            // Capture loop variables for the closure.
+            var capturedAgentName = agentName;
+            var capturedEndpointUrl = a2aEndpointUrl;
+            var capturedCredential = a2aCredential;
+
+            // Function name must be a valid identifier (no hyphens).
+            var fnName = capturedAgentName.Replace("-", "_");
+
+            var tool = AIFunctionFactory.Create(
+                async ([System.ComponentModel.Description("The task or question to send to this sub-agent.")] string task,
+                       CancellationToken ct) =>
+                {
+                    var tokenResult = await capturedCredential.GetTokenAsync(
+                        new TokenRequestContext(["https://ai.azure.com/.default"]), ct);
+
+                    using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
+                    http.DefaultRequestHeaders.Authorization =
+                        new AuthenticationHeaderValue("Bearer", tokenResult.Token);
+                    http.DefaultRequestHeaders.Accept.Add(
+                        new MediaTypeWithQualityHeaderValue("application/json"));
+
+                    var messageId = Guid.NewGuid().ToString("N");
+                    var payload = JsonSerializer.Serialize(new
+                    {
+                        jsonrpc = "2.0",
+                        id = messageId,
+                        method = "message/send",
+                        @params = new
+                        {
+                            message = new
+                            {
+                                messageId,
+                                kind = "message",
+                                role = "user",
+                                parts = new[] { new { kind = "text", text = task } }
+                            }
+                        }
+                    });
+
+                    Console.WriteLine($"[A2A] → {capturedAgentName}: {task[..Math.Min(80, task.Length)]}...");
+                    var response = await http.PostAsync(
+                        capturedEndpointUrl,
+                        new StringContent(payload, Encoding.UTF8, "application/json"),
+                        ct);
+
+                    response.EnsureSuccessStatusCode();
+                    var responseBody = await response.Content.ReadAsStringAsync(ct);
+                    Console.WriteLine($"[A2A] ← {capturedAgentName}: {responseBody[..Math.Min(200, responseBody.Length)]}");
+
+                    // Extract text parts from A2A JSON-RPC 2.0 response.
+                    try
+                    {
+                        using var doc = JsonDocument.Parse(responseBody);
+                        if (doc.RootElement.TryGetProperty("result", out var result))
+                        {
+                            if (result.TryGetProperty("parts", out var parts))
+                            {
+                                var texts = parts.EnumerateArray()
+                                    .Where(p => p.TryGetProperty("kind", out var k) && k.GetString() == "text"
+                                             && p.TryGetProperty("text", out _))
+                                    .Select(p => p.GetProperty("text").GetString() ?? string.Empty);
+                                var joined = string.Join("\n", texts);
+                                if (!string.IsNullOrWhiteSpace(joined)) return joined;
+                            }
+                            // Fallback: return the whole result as JSON.
+                            return result.ToString();
+                        }
+                    }
+                    catch (JsonException) { /* fall through to raw response */ }
+
+                    return responseBody;
+                },
+                name: fnName,
+                description: $"Invoke the {capturedAgentName} sub-agent for specialized audit assistance. Send it a specific task or question.");
+
+            a2aTools.Add(tool);
+            Console.WriteLine($"[A2A] Registered sub-agent tool '{agentName}': {a2aEndpointUrl}");
         }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"[WARNING] Failed to load A2A connection '{connName}': {ex.Message}");
-            Console.WriteLine($"[WARNING] The agent will start, but A2A routing to '{connName}' will fail until the connection exists.");
-        }
-    }
-    
-    if (a2aTools.Count == 0 && config.A2aConnectionNames.Count > 0)
-    {
-        Console.WriteLine($"[WARNING] No A2A connections were successfully loaded. Check that enable-a2a.ps1 has been run for all agents.");
     }
 }
 else if (config.A2aConnectionNames is { Count: > 0 })
 {
-    Console.WriteLine($"[WARNING] A2A connections configured but FOUNDRY_PROJECT_ENDPOINT is not set. Skipping A2A initialization.");
+    Console.WriteLine("[WARNING] A2A connections configured but FOUNDRY_PROJECT_ENDPOINT is not set. Skipping A2A initialization.");
 }
 
-AIAgent agent = projectClient != null
-    ? projectClient.AsAIAgent(
-        model: config.ModelDeploymentName,
-        instructions: config.Instructions,
-        name: config.Name,
-        description: config.Description)
-    : throw new InvalidOperationException("Cannot initialize agent without FOUNDRY_PROJECT_ENDPOINT or project context.");
+AIAgent? agent = null;
+try
+{
+    if (projectClient != null)
+    {
+        IList<AITool>? tools = a2aTools.Count > 0 ? a2aTools : null;
+        agent = projectClient.AsAIAgent(
+            model: config.ModelDeploymentName,
+            instructions: config.Instructions,
+            name: config.Name,
+            description: config.Description,
+            tools: tools);
+        var toolSummary = a2aTools.Count > 0 ? $" ({a2aTools.Count} A2A tool(s))" : " (no A2A tools)";
+        Console.WriteLine($"[OK] Agent initialized with Foundry context{toolSummary}.");
+    }
+    else
+    {
+        Console.WriteLine("[WARNING] No Foundry project context available. Attempting fallback initialization...");
+        // In Foundry hosted environment, the platform might provide the agent context differently
+        // For now, we'll log and continue—the actual agent initialization happens via the platform
+        Console.WriteLine("[OK] Proceeding with hosted agent initialization (platform-managed).");
+    }
+}
+catch (Exception ex)
+{
+    Console.WriteLine($"[ERROR] Agent initialization failed: {ex.Message}");
+    Console.WriteLine("[ERROR] Stack trace: " + ex.StackTrace);
+    throw;
+}
+
+if (agent == null && projectClient == null)
+{
+    // In Foundry hosted environment, projectClient may be unavailable, but that's OK
+    // The platform will handle agent initialization through responses protocol
+    Console.WriteLine("[INFO] Running in Foundry hosted mode (projectClient not available).");
+    Console.WriteLine("[INFO] Agent will be initialized by the platform.");
+}
 
 var builder = WebApplication.CreateBuilder(args);
+var listenUrls = Environment.GetEnvironmentVariable("ASPNETCORE_URLS");
+if (string.IsNullOrWhiteSpace(listenUrls))
+{
+    builder.WebHost.UseUrls("http://0.0.0.0:80", "http://0.0.0.0:8080");
+}
 
-#pragma warning disable MAAI001
-builder.Services.AddSingleton<HostedSessionIsolationKeyProvider, LocalDevSessionIsolationKeyProvider>();
-#pragma warning restore MAAI001
-
-#pragma warning disable MAAI001
-builder.Services.AddFoundryResponses(agent, new InMemoryAgentSessionStore());
-#pragma warning restore MAAI001
+var responsesReady = agent is not null;
+if (agent is { } initializedAgent)
+{
+    // Pass null for session store → SDK default (FileSystemAgentSessionStore at /.checkpoints
+    // in hosted mode, {cwd}/.checkpoints locally). InMemoryAgentSessionStore is not suitable
+    // for multi-step hosted sessions where platform may expect filesystem session state.
+    // Note: AddFoundryResponses (1.16.0+) internally calls ConfigureFoundryListenPort, which
+    // binds Kestrel to port 8088 (the Foundry probe port) instead of port 80 (base image default).
+    #pragma warning disable MAAI001
+    builder.Services.AddFoundryResponses(initializedAgent, null);
+    #pragma warning restore MAAI001
+}
+else
+{
+    Console.WriteLine("[WARNING] Agent is null. Foundry responses will not be available.");
+}
 
 var app = builder.Build();
-app.MapFoundryResponses("/responses");
+
+if (diagnosticsEnabled)
+{
+    app.Use(async (context, next) =>
+    {
+        var selfProbe = context.Request.Headers.TryGetValue("x-orch-self-probe", out var selfProbeValue)
+            ? selfProbeValue.ToString()
+            : "0";
+        var callId = context.Request.Headers.TryGetValue("x-agent-foundry-call-id", out var callIdValue)
+            ? callIdValue.ToString()
+            : "(none)";
+        var userAgent = context.Request.Headers.TryGetValue("User-Agent", out var uaValue)
+            ? uaValue.ToString()
+            : "(none)";
+
+        Console.WriteLine($"[REQ] {context.Request.Method} {context.Request.Path} callId={callId} selfProbe={selfProbe} ua={userAgent}");
+
+        // For non-self-probe POSTs, dump all headers and body so we can see exactly what Foundry sends
+        if (selfProbe == "0" && context.Request.Method == "POST")
+        {
+            foreach (var header in context.Request.Headers)
+                Console.WriteLine($"[HDR] {header.Key}: {header.Value}");
+
+            context.Request.EnableBuffering();
+            using var reader = new System.IO.StreamReader(context.Request.Body, leaveOpen: true);
+            var body = await reader.ReadToEndAsync();
+            context.Request.Body.Position = 0;
+            var preview = body.Length > 1000 ? body[..1000] + "...[truncated]" : body;
+            Console.WriteLine($"[BODY] {preview}");
+        }
+
+        await next();
+        Console.WriteLine($"[RES] {context.Request.Method} {context.Request.Path} => {context.Response.StatusCode} selfProbe={selfProbe}");
+    });
+}
+
 app.MapGet("/health", () => Results.Ok(new { status = "healthy" }));
+
+if (responsesReady)
+{
+    // Single MapFoundryResponses() call — dual mapping causes conflicting response handler
+    // pipeline registrations. Foundry strips the external /protocols/openai prefix and routes
+    // internally to /responses.
+    app.MapFoundryResponses();
+}
+
+if (diagnosticsEnabled)
+{
+    foreach (var endpoint in app.Services.GetRequiredService<EndpointDataSource>().Endpoints)
+    {
+        Console.WriteLine($"[ROUTE] {endpoint.DisplayName}");
+    }
+
+    app.Lifetime.ApplicationStarted.Register(() =>
+    {
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(1200);
+                using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(4) };
+
+                var probeBaseUrl = Environment.GetEnvironmentVariable("ORCH_SELF_PROBE_BASE_URL");
+                if (string.IsNullOrWhiteSpace(probeBaseUrl))
+                {
+                    var aspnetUrls = Environment.GetEnvironmentVariable("ASPNETCORE_URLS");
+                    var firstUrl = aspnetUrls?
+                        .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                        .FirstOrDefault(u => u.StartsWith("http://", StringComparison.OrdinalIgnoreCase));
+                    probeBaseUrl = firstUrl ?? "http://127.0.0.1:80";
+                }
+
+                probeBaseUrl = probeBaseUrl.Replace("://+", "://127.0.0.1").Replace("://*", "://127.0.0.1");
+                probeBaseUrl = probeBaseUrl.TrimEnd('/');
+
+                foreach (var path in new[] { "/readiness", "/health" })
+                {
+                    var url = $"{probeBaseUrl}{path}";
+                    var request = new HttpRequestMessage(HttpMethod.Get, url);
+                    request.Headers.Add("x-orch-self-probe", "1");
+                    request.Headers.UserAgent.ParseAdd("orch-agent-self-probe");
+                    var res = await http.SendAsync(request);
+                    Console.WriteLine($"[SELF-PROBE] GET {path} => {(int)res.StatusCode} {res.StatusCode}");
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[SELF-PROBE] Failed: {ex.Message}");
+            }
+        });
+    });
+}
+
 app.Run();
 
 internal sealed record OrchestratorAgentConfig
@@ -97,6 +330,16 @@ internal sealed record OrchestratorAgentConfig
 
     /// <summary>Optional. One or more RemoteA2A connection names created by enable-a2a.ps1.</summary>
     public IReadOnlyList<string>? A2aConnectionNames { get; init; }
+
+    /// <summary>
+    /// Optional. Pre-resolved ARM resource IDs for RemoteA2A connections, injected by
+    /// publish-orch-agent.ps1 at publish time. When present, the runtime skips the
+    /// GetConnection API call (which requires elevated permissions) and uses these IDs directly.
+    /// </summary>
+    public IReadOnlyList<string>? A2aConnectionIds { get; init; }
+
+    /// <summary>Optional fallback when env vars do not provide a project endpoint.</summary>
+    public string? ProjectEndpoint { get; init; }
 
     public static OrchestratorAgentConfig Load(string path)
     {
@@ -131,27 +374,4 @@ internal sealed record OrchestratorAgentConfig
             throw new InvalidOperationException($"Fill in {name} before publishing the agent.");
         }
     }
-}
-
-#pragma warning disable MAAI001
-sealed class LocalDevSessionIsolationKeyProvider : HostedSessionIsolationKeyProvider
-#pragma warning restore MAAI001
-{
-    private const string LocalDevUserId = "local-dev-user";
-
-#pragma warning disable MAAI001
-    public override ValueTask<HostedSessionContext?> GetKeysAsync(
-        ResponseContext context,
-        CreateResponse request,
-        CancellationToken cancellationToken)
-    {
-        var userId = context.PlatformContext?.UserIdKey;
-        if (!string.IsNullOrWhiteSpace(userId))
-        {
-            return ValueTask.FromResult<HostedSessionContext?>(new HostedSessionContext(userId));
-        }
-
-        return ValueTask.FromResult<HostedSessionContext?>(new HostedSessionContext(LocalDevUserId));
-    }
-#pragma warning restore MAAI001
 }

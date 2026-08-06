@@ -29,7 +29,7 @@ Run the `scripts/setup-part2.ps1` script to deploy the audit API. The script han
 2. Run the deployment script with your initials and resource group name:
 
    ```powershell
-   pwsh scripts/setup-part2.ps1 -Initials "jf" -ResourceGroupName "rg-workshop"
+   pwsh scripts/setup-part2.ps1 -Initials "jf" -ResourceGroupName "rg-agent-test-mx01"
    ```
 
    **Note:** All resources (container registry, container environment, container app) will be created in the same location as the resource group.
@@ -81,12 +81,12 @@ Now deploy the MCP server to Azure Container Apps and capture its endpoint URL.
 1. Open PowerShell and run the deployment script:
 
    ```powershell
-   pwsh scripts/deploy-mcp.ps1 -Initials "jf" -ResourceGroupName "rg-workshop" -ApiUrl "https://aca-agentws-api-jf-eastus.azurecontainerapps.io"
+   pwsh scripts/deploy-mcp.ps1 -Initials "jf" -ResourceGroupName "rg-agent-test-mx01" -ApiUrl "<AUDIT_API_URL_FROM_SETUP_SCRIPT>"
    ```
 
    Replace:
    - `jf` with your actual initials
-   - `rg-workshop` with your resource group name
+   - `rg-agent-test-mx01` with the resource group created in Part 1, if you chose a different name
    - Use the **Audit API URL** from the `setup-part2.ps1` script output
 
    **Note:** All resources will be created in the same location as your resource group.
@@ -152,7 +152,7 @@ In Foundry:
 11. Click **Connect**.
 12. **Save** the agent.
 
-**Expected result:** The MCP server is connected using your server URL, and **Web Search** is no longer present.
+**Expected result:** The MCP server is connected using your server URL, and **Web Search** is no longer present. A2A configuration is deferred to Part 3.
 
 ---
 

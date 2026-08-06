@@ -1,11 +1,11 @@
 <#
 .SYNOPSIS
-    Enables incoming A2A on a Foundry agent and creates a RemoteA2A project connection.
+    Enables incoming A2A on a Foundry agent.
 
 .DESCRIPTION
-    Patches the target agent to activate the A2A protocol and publish an agent card,
-    then creates a RemoteA2A connection in the Foundry project so that other agents
-    (such as the orchestrator) can reference it by connection name.
+    Patches the target agent to activate the A2A protocol and publish an agent card.
+    The base A2A endpoint is used by calling agents (e.g., orchestrators) to invoke
+    this agent. The agent card URL is provided for verification only.
 
 .PARAMETER FoundryName
     The Foundry account name (Azure Cognitive Services account).
@@ -19,9 +19,6 @@
 .PARAMETER AgentName
     The name of the agent to expose as an A2A endpoint.
 
-.PARAMETER ConnectionName
-    The connection to create in the project. Defaults to "<AgentName>-a2a".
-
 .PARAMETER AgentDescription
     Description surfaced in the agent card so calling agents know what this agent does.
 
@@ -33,14 +30,9 @@ param(
     [Parameter(Mandatory)][string]$ResourceGroupName,
     [Parameter(Mandatory)][string]$ProjectName,
     [Parameter(Mandatory)][string]$AgentName,
-    [string]$ConnectionName,
     [string]$AgentDescription = "A Foundry agent exposed via A2A",
     [string]$AgentVersion = "1.0"
 )
-
-if (-not $ConnectionName) {
-    $ConnectionName = "$AgentName-a2a"
-}
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = "Stop"
@@ -61,7 +53,7 @@ if ([string]::IsNullOrWhiteSpace($accountEndpoint)) {
     exit 1
 }
 
-$projectEndpoint = $accountEndpoint.TrimEnd('/') + "/api/projects/$ProjectName"
+$projectEndpoint = "https://$FoundryName.services.ai.azure.com/api/projects/$ProjectName"
 Write-Host "  Project endpoint : $projectEndpoint"
 
 # ---------------------------------------------------------------------------
@@ -116,53 +108,14 @@ catch {
 $a2aBaseUrl = "$projectEndpoint/agents/$AgentName/endpoint/protocols/a2a"
 
 # ---------------------------------------------------------------------------
-# 4. Create RemoteA2A connection via ARM
-# ---------------------------------------------------------------------------
-Write-Host ""
-Write-Host "Creating RemoteA2A connection '$ConnectionName'..."
-
-$subscription = & $az account show --query id -o tsv
-$mgmtToken    = & $az account get-access-token `
-    --scope https://management.azure.com/.default `
-    --query accessToken -o tsv
-
-$connUri = "https://management.azure.com/subscriptions/$subscription" +
-           "/resourceGroups/$ResourceGroupName" +
-           "/providers/Microsoft.CognitiveServices/accounts/$FoundryName" +
-           "/projects/$ProjectName/connections/$ConnectionName" +
-           "?api-version=2025-04-01-preview"
-
-$connBody = @{
-    properties = @{
-        authType    = "AgenticIdentityToken"
-        category    = "RemoteA2A"
-        target      = $a2aBaseUrl
-        audience    = "https://ai.azure.com"
-        Credentials = @{}
-        metadata    = @{}
-    }
-} | ConvertTo-Json -Depth 4
-
-try {
-    $connResult = Invoke-RestMethod `
-        -Method Put `
-        -Uri $connUri `
-        -Headers @{ Authorization = "Bearer $mgmtToken" } `
-        -ContentType "application/json" `
-        -Body $connBody
-    Write-Host "  Connection created: $($connResult.name)"
-}
-catch {
-    Write-Error "Failed to create connection: $_"
-    exit 1
-}
-
-# ---------------------------------------------------------------------------
-# 5. Summary
+# 4. Summary
 # ---------------------------------------------------------------------------
 Write-Host ""
 Write-Host "A2A setup complete."
 Write-Host "  Agent A2A base URL : $a2aBaseUrl"
-Write-Host "  Connection name    : $ConnectionName"
+$agentCardUrl = "$a2aBaseUrl/agentCard/v1.0"
+Write-Host "  Agent card URL (v1.0): $agentCardUrl"
 Write-Host ""
-Write-Host "Next step: set 'a2aConnectionName' to '$ConnectionName' in orchestrator-agent.json."
+Write-Host "Next step (for prompt orchestrator in Step 3 of Part 3):"
+Write-Host "  Copy the Agent A2A base URL above and paste it into the A2A Tool dialog."
+Write-Host "  Do not paste the Agent card URL; Foundry discovers the card automatically."

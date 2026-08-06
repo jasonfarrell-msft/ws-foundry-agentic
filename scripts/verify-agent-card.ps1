@@ -66,7 +66,7 @@ if ([string]::IsNullOrWhiteSpace($accountEndpoint)) {
     exit 1
 }
 
-$projectEndpoint = $accountEndpoint.TrimEnd('/') + "/api/projects/$ProjectName"
+$projectEndpoint = "https://$FoundryName.services.ai.azure.com/api/projects/$ProjectName"
 
 # ---------------------------------------------------------------------------
 # Acquire token

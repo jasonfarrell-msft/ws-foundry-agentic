@@ -1,5 +1,8 @@
 using Azure.AI.Projects.Agents;
 using Azure.Identity;
+using System.ClientModel;
+using System.Collections.Generic;
+using System.Reflection;
 using System.Text.Json;
 
 if (args.Length < 2)
@@ -34,7 +37,8 @@ var config = OrchestratorAgentConfig.Load(configPath);
 config.Validate();
 
 #pragma warning disable AAIP001
-var definition = new HostedAgentDefinition("1", "2Gi")
+var responsesProtocol = new ProtocolVersionRecord(ProjectsAgentProtocol.Responses, "2.0.0");
+var definition = new HostedAgentDefinition([responsesProtocol], "1", "2Gi")
 {
     CodeConfiguration = new CodeConfiguration(
         "dotnet_10",
@@ -42,9 +46,12 @@ var definition = new HostedAgentDefinition("1", "2Gi")
         CodeDependencyResolution.Bundled)
 };
 
-definition.Versions.Add(new ProtocolVersionRecord(ProjectsAgentProtocol.Responses, "1.0.0"));
+// The SDK's Versions property serializes to protocol_versions (external caller protocol).
+// Foundry also requires container_protocol_versions (internal container routing protocol).
+// The SDK doesn't expose a public property for this field, so we inject it via reflection.
+SetContainerProtocolVersions(definition, [responsesProtocol]);
 
-var metadata = new CreateAgentVersionFromCodeMetadata(definition)
+var metadata = new AgentVersionFromCodeMetadata(definition)
 {
     Description = config.Description
 };
@@ -60,7 +67,9 @@ metadata.Metadata["runtime"] = "dotnet_10";
 metadata.Metadata["dependencyResolution"] = "bundled";
 #pragma warning restore AAIP001
 
-var client = new AgentAdministrationClient(new Uri(projectEndpoint), new DefaultAzureCredential());
+// Use AzureCliCredential directly — most reliable on local dev machines
+var credential = new AzureCliCredential();
+var client = new AgentAdministrationClient(new Uri(projectEndpoint), credential);
 var version = client.CreateAgentVersionFromCode(config.Name, packagePath, metadata).Value;
 
 WriteStatus(version);
@@ -85,6 +94,27 @@ static void WriteStatus(ProjectsAgentVersion version)
 {
     Console.WriteLine($"Status: {version.Status}");
 }
+
+#pragma warning disable AAIP001
+static void SetContainerProtocolVersions(HostedAgentDefinition definition, IEnumerable<ProtocolVersionRecord> versions)
+{
+    // The SDK serializes Versions → protocol_versions (external callers).
+    // Foundry needs container_protocol_versions (internal container routing) which has no public property.
+    // Inject it via the _additionalBinaryDataProperties backing field used by the SDK serializer.
+    var addlPropsField = typeof(HostedAgentDefinition)
+        .GetField("_additionalBinaryDataProperties", BindingFlags.NonPublic | BindingFlags.Instance)
+        ?? throw new InvalidOperationException("SDK internals changed: _additionalBinaryDataProperties field not found on HostedAgentDefinition.");
+
+    var dict = addlPropsField.GetValue(definition) as IDictionary<string, BinaryData>
+               ?? new Dictionary<string, BinaryData>();
+    if (addlPropsField.GetValue(definition) is null)
+        addlPropsField.SetValue(definition, dict);
+
+    var versionsJson = System.Text.Json.JsonSerializer.Serialize(
+        versions.Select(v => new { protocol = v.Protocol.ToString(), version = v.Version }));
+    dict["container_protocol_versions"] = BinaryData.FromString(versionsJson);
+}
+#pragma warning restore AAIP001
 
 string GetArg(string name)
 {

@@ -28,6 +28,128 @@ if ($json -match '__FILL_ME__') {
     Write-Host "Error: Fill in name, description, modelDeploymentName, and instructions before publishing." -ForegroundColor Red
     exit 1
 }
+$config = $json | ConvertFrom-Json
+
+$az = Get-Command az -ErrorAction SilentlyContinue
+
+function Write-RbacGuidance {
+    param(
+        [string]$AgentName,
+        [string]$PrincipalId,
+        [string]$ProjectScope,
+        [string]$ProjectEndpoint
+    )
+
+    Write-Host ""
+    Write-Host "A2A runtime RBAC guidance:" -ForegroundColor Yellow
+    Write-Host "Hosted agent '$AgentName' needs the 'Foundry User' role at the Foundry project scope so it can call the Foundry Responses API at runtime." -ForegroundColor Yellow
+
+    if ($PrincipalId) {
+        Write-Host "Ask a platform owner to run:" -ForegroundColor Yellow
+        Write-Host "az role assignment create --assignee-object-id $PrincipalId --assignee-principal-type ServicePrincipal --role `"Foundry User`" --scope `"$ProjectScope`"" -ForegroundColor Cyan
+        return
+    }
+
+    Write-Host "After the first publish, retrieve the hosted agent identity:" -ForegroundColor Yellow
+    Write-Host "az rest --method get --url `"$ProjectEndpoint/agents/$($AgentName)?api-version=v1`" --resource https://ai.azure.com --query `"instance_identity.principal_id`" -o tsv" -ForegroundColor Cyan
+    Write-Host "Then ask a platform owner to grant:" -ForegroundColor Yellow
+    Write-Host "az role assignment create --assignee-object-id <principal-id> --assignee-principal-type ServicePrincipal --role `"Foundry User`" --scope `"$ProjectScope`"" -ForegroundColor Cyan
+}
+
+function Resolve-A2AConnectionIds {
+    param(
+        [string[]]$ConnectionNames,
+        [string]$ProjectScope,
+        [System.Management.Automation.CommandInfo]$AzCommand
+    )
+
+    $ids = @()
+    foreach ($name in $ConnectionNames) {
+        $armUrl = "https://management.azure.com$ProjectScope/connections/$($name)?api-version=2025-04-01-preview"
+        $result = & $AzCommand.Source rest --method get --url $armUrl --only-show-errors 2>&1
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host "  [WARNING] Could not resolve ARM ID for connection '$name': $([string]$result)" -ForegroundColor Yellow
+            continue
+        }
+        $connObj = [string]$result | ConvertFrom-Json
+        if ($connObj.id) {
+            $ids += $connObj.id
+            Write-Host "  [OK] Resolved connection '$name'" -ForegroundColor DarkGray
+        }
+    }
+    return ,$ids
+}
+
+function Test-A2ARuntimeRbac {
+    param(
+        [string]$AgentName,
+        [string]$ProjectEndpoint,
+        [string]$ProjectScope,
+        [System.Management.Automation.CommandInfo]$AzCommand
+    )
+
+    if (-not $AzCommand) {
+        return @{
+            Status = "unknown"
+            Reason = "Azure CLI is not available, so the script cannot inspect hosted agent RBAC."
+        }
+    }
+
+    $agentResponse = & $AzCommand.Source rest `
+        --method get `
+        --url "$ProjectEndpoint/agents/$($AgentName)?api-version=v1" `
+        --resource https://ai.azure.com `
+        --only-show-errors 2>&1
+
+    if ($LASTEXITCODE -ne 0) {
+        $message = [string]$agentResponse
+        if ($message -match "404|NotFound") {
+            return @{ Status = "agentMissing" }
+        }
+
+        return @{
+            Status = "unknown"
+            Reason = "Could not inspect hosted agent identity. $message"
+        }
+    }
+
+    $agent = $agentResponse | ConvertFrom-Json
+    $principalId = [string]$agent.instance_identity.principal_id
+    if ([string]::IsNullOrWhiteSpace($principalId)) {
+        return @{
+            Status = "unknown"
+            Reason = "Foundry did not return a hosted agent principal ID."
+        }
+    }
+
+    $roleCount = & $AzCommand.Source role assignment list `
+        --assignee-object-id $principalId `
+        --scope $ProjectScope `
+        --include-inherited `
+        --query "[?roleDefinitionName=='Foundry User'] | length(@)" `
+        --output tsv `
+        --only-show-errors 2>&1
+
+    if ($LASTEXITCODE -ne 0) {
+        return @{
+            Status = "unknown"
+            PrincipalId = $principalId
+            Reason = "Could not verify project-scope role assignments. $([string]$roleCount)"
+        }
+    }
+
+    if ([int]$roleCount -gt 0) {
+        return @{
+            Status = "present"
+            PrincipalId = $principalId
+        }
+    }
+
+    return @{
+        Status = "missing"
+        PrincipalId = $principalId
+    }
+}
 
 if (-not $ProjectEndpoint) {
     $ProjectEndpoint = $env:FOUNDRY_PROJECT_ENDPOINT
@@ -44,7 +166,6 @@ if (-not $ProjectEndpoint) {
         exit 1
     }
 
-    $az = Get-Command az -ErrorAction SilentlyContinue
     if (-not $az) {
         Write-Host "Error: Azure CLI is required to resolve the Foundry project endpoint." -ForegroundColor Red
         exit 1
@@ -76,6 +197,65 @@ if (-not $ProjectEndpoint) {
     $ProjectEndpoint = "{0}/api/projects/{1}" -f $accountEndpoint.TrimEnd('/'), $ProjectName
 }
 
+$projectScope = $null
+if ($az -and $FoundryName -and $ResourceGroupName -and $ProjectName) {
+    $subscriptionId = & $az.Source account show --query id --output tsv --only-show-errors 2>&1
+    if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace([string]$subscriptionId)) {
+        $projectScope = "/subscriptions/$([string]$subscriptionId)/resourceGroups/$ResourceGroupName/providers/Microsoft.CognitiveServices/accounts/$FoundryName/projects/$ProjectName"
+    }
+}
+
+$configuredA2aConnections = if ($null -ne $config.a2aConnectionNames) { @($config.a2aConnectionNames) } else { @() }
+if ($configuredA2aConnections.Count -gt 0) {
+    if ($projectScope) {
+        Write-Host "Checking hosted agent RBAC for A2A connections..." -ForegroundColor Yellow
+        $rbacCheck = Test-A2ARuntimeRbac `
+            -AgentName $config.name `
+            -ProjectEndpoint $ProjectEndpoint `
+            -ProjectScope $projectScope `
+            -AzCommand $az
+
+        switch ($rbacCheck.Status) {
+            "present" {
+                Write-Host "  [OK] Hosted agent identity already has 'Foundry User' at the project scope." -ForegroundColor Green
+            }
+            "missing" {
+                Write-Host "Error: Hosted agent identity is missing 'Foundry User' at the Foundry project scope." -ForegroundColor Red
+                Write-Host "Publishing now would produce a hosted agent that starts but cannot load its RemoteA2A connections." -ForegroundColor Red
+                Write-RbacGuidance `
+                    -AgentName $config.name `
+                    -PrincipalId $rbacCheck.PrincipalId `
+                    -ProjectScope $projectScope `
+                    -ProjectEndpoint $ProjectEndpoint
+                exit 1
+            }
+            "agentMissing" {
+                Write-Host "No existing hosted agent named '$($config.name)' was found. The first publish will create its runtime identity." -ForegroundColor Yellow
+                Write-Host "After the first publish completes, rerun this script so it can verify the A2A RBAC prerequisite." -ForegroundColor Yellow
+                Write-RbacGuidance `
+                    -AgentName $config.name `
+                    -PrincipalId $null `
+                    -ProjectScope $projectScope `
+                    -ProjectEndpoint $ProjectEndpoint
+            }
+            default {
+                Write-Host "Warning: Unable to verify hosted agent RBAC before publish." -ForegroundColor Yellow
+                Write-Host "  $($rbacCheck.Reason)" -ForegroundColor Yellow
+                Write-Host "Treat this as a platform prerequisite if you do not have RBAC visibility." -ForegroundColor Yellow
+                Write-RbacGuidance `
+                    -AgentName $config.name `
+                    -PrincipalId $rbacCheck.PrincipalId `
+                    -ProjectScope $projectScope `
+                    -ProjectEndpoint $ProjectEndpoint
+            }
+        }
+    }
+    else {
+        Write-Host "Warning: Skipping hosted agent RBAC preflight because the Foundry project scope could not be determined." -ForegroundColor Yellow
+        Write-Host "Provide -FoundryName, -ResourceGroupName, and -ProjectName so the script can check the A2A RBAC prerequisite." -ForegroundColor Yellow
+    }
+}
+
 $tempPublishRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("orch-agent-publish-" + [System.Guid]::NewGuid().ToString("N"))
 New-Item -ItemType Directory -Path $tempPublishRoot | Out-Null
 
@@ -96,6 +276,29 @@ try {
         Write-Host "Error: Published output is missing orchestrator-agent.json." -ForegroundColor Red
         exit 1
     }
+
+    $publishedConfigPath = Join-Path $tempPublishRoot "orchestrator-agent.json"
+    $publishedConfig = Get-Content $publishedConfigPath -Raw | ConvertFrom-Json
+    $publishedConfig | Add-Member -NotePropertyName "projectEndpoint" -NotePropertyValue $ProjectEndpoint -Force
+
+    # Resolve A2A connection ARM IDs at publish time so the runtime can use them
+    # directly without calling GetConnection (which requires elevated permissions).
+    if ($configuredA2aConnections.Count -gt 0 -and $projectScope -and $az) {
+        Write-Host "Resolving A2A connection ARM IDs..." -ForegroundColor Yellow
+        $resolvedIds = Resolve-A2AConnectionIds `
+            -ConnectionNames $configuredA2aConnections `
+            -ProjectScope $projectScope `
+            -AzCommand $az
+        if ($resolvedIds.Count -gt 0) {
+            $publishedConfig | Add-Member -NotePropertyName "a2aConnectionIds" -NotePropertyValue $resolvedIds -Force
+            Write-Host "Injected $($resolvedIds.Count) A2A connection ARM ID(s) into published orchestrator-agent.json." -ForegroundColor DarkGray
+        } else {
+            Write-Host "Warning: No A2A connection ARM IDs were resolved. Runtime will fall back to GetConnection (may fail without elevated permissions)." -ForegroundColor Yellow
+        }
+    }
+
+    $publishedConfig | ConvertTo-Json -Depth 20 | Set-Content -Path $publishedConfigPath -Encoding UTF8
+    Write-Host "Injected project endpoint into published orchestrator-agent.json." -ForegroundColor DarkGray
 
     Write-Host "Publishing hosted agent to Foundry..." -ForegroundColor Yellow
     dotnet run `
