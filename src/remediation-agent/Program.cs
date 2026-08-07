@@ -13,10 +13,10 @@ using Microsoft.Extensions.AI;
 
 Env.NoClobber().TraversePath().Load();
 
-var configPath = Environment.GetEnvironmentVariable("ORCH_AGENT_CONFIG_PATH") ?? "orchestrator-agent.json";
-var config = OrchestratorAgentConfig.Load(configPath);
+var configPath = Environment.GetEnvironmentVariable("REMEDIATION_AGENT_CONFIG_PATH") ?? "remediation-agent.json";
+var config = RemediationAgentConfig.Load(configPath);
 config.Validate();
-Console.WriteLine("[BOOT] Orchestrator startup marker: v26-a2a-auth-fix");
+Console.WriteLine("[BOOT] Remediation agent startup marker: v26-a2a-auth-fix");
 Console.WriteLine($"[BOOT] FOUNDRY_HOSTING_ENVIRONMENT={Environment.GetEnvironmentVariable("FOUNDRY_HOSTING_ENVIRONMENT") ?? "(null)"}");
 Console.WriteLine($"[BOOT] FOUNDRY_AGENT_NAME={Environment.GetEnvironmentVariable("FOUNDRY_AGENT_NAME") ?? "(null)"}");
 Console.WriteLine($"[BOOT] FOUNDRY_AGENT_VERSION={Environment.GetEnvironmentVariable("FOUNDRY_AGENT_VERSION") ?? "(null)"}");
@@ -29,7 +29,7 @@ var projectEndpointStr =
 if (string.IsNullOrWhiteSpace(projectEndpointStr))
 {
     Console.WriteLine("[WARNING] No project endpoint available from env or config.");
-    Console.WriteLine("[WARNING] Set FOUNDRY_PROJECT_ENDPOINT or AZURE_AI_PROJECT_ENDPOINT, or add projectEndpoint in orchestrator-agent.json.");
+    Console.WriteLine("[WARNING] Set FOUNDRY_PROJECT_ENDPOINT or AZURE_AI_PROJECT_ENDPOINT, or add projectEndpoint in remediation-agent.json.");
 }
 
 AIProjectClient? projectClient = null;
@@ -301,7 +301,7 @@ if (diagnosticsEnabled)
                     var url = $"{probeBaseUrl}{path}";
                     var request = new HttpRequestMessage(HttpMethod.Get, url);
                     request.Headers.Add("x-orch-self-probe", "1");
-                    request.Headers.UserAgent.ParseAdd("orch-agent-self-probe");
+                    request.Headers.UserAgent.ParseAdd("remediation-agent-self-probe");
                     var res = await http.SendAsync(request);
                     Console.WriteLine($"[SELF-PROBE] GET {path} => {(int)res.StatusCode} {res.StatusCode}");
                 }
@@ -316,7 +316,7 @@ if (diagnosticsEnabled)
 
 app.Run();
 
-internal sealed record OrchestratorAgentConfig
+internal sealed record RemediationAgentConfig
 {
     public const string Placeholder = "__FILL_ME__";
 
@@ -333,7 +333,7 @@ internal sealed record OrchestratorAgentConfig
 
     /// <summary>
     /// Optional. Pre-resolved ARM resource IDs for RemoteA2A connections, injected by
-    /// publish-orch-agent.ps1 at publish time. When present, the runtime skips the
+    /// publish-agent.ps1 at publish time. When present, the runtime skips the
     /// GetConnection API call (which requires elevated permissions) and uses these IDs directly.
     /// </summary>
     public IReadOnlyList<string>? A2aConnectionIds { get; init; }
@@ -341,7 +341,7 @@ internal sealed record OrchestratorAgentConfig
     /// <summary>Optional fallback when env vars do not provide a project endpoint.</summary>
     public string? ProjectEndpoint { get; init; }
 
-    public static OrchestratorAgentConfig Load(string path)
+    public static RemediationAgentConfig Load(string path)
     {
         if (!File.Exists(path))
         {
@@ -349,7 +349,7 @@ internal sealed record OrchestratorAgentConfig
         }
 
         var json = File.ReadAllText(path);
-        return System.Text.Json.JsonSerializer.Deserialize<OrchestratorAgentConfig>(
+        return System.Text.Json.JsonSerializer.Deserialize<RemediationAgentConfig>(
             json,
             new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true })
             ?? throw new InvalidOperationException($"Could not parse {path}.");

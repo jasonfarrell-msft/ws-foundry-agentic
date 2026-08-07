@@ -26,14 +26,14 @@ if (string.IsNullOrWhiteSpace(packagePath))
     return 1;
 }
 
-var configPath = Path.Combine(packagePath, "orchestrator-agent.json");
+var configPath = Path.Combine(packagePath, "remediation-agent.json");
 if (!File.Exists(configPath))
 {
     Console.Error.WriteLine($"Missing published config file: {configPath}");
     return 1;
 }
 
-var config = OrchestratorAgentConfig.Load(configPath);
+var config = RemediationAgentConfig.Load(configPath);
 config.Validate();
 
 #pragma warning disable AAIP001
@@ -42,7 +42,7 @@ var definition = new HostedAgentDefinition([responsesProtocol], "1", "2Gi")
 {
     CodeConfiguration = new CodeConfiguration(
         "dotnet_10",
-        ["dotnet", "orch-agent.dll"],
+        ["dotnet", "remediation-agent.dll"],
         CodeDependencyResolution.Bundled)
 };
 
@@ -127,7 +127,7 @@ string GetArg(string name)
     return args[index + 1];
 }
 
-internal sealed record OrchestratorAgentConfig
+internal sealed record RemediationAgentConfig
 {
     public const string Placeholder = "__FILL_ME__";
 
@@ -139,10 +139,10 @@ internal sealed record OrchestratorAgentConfig
 
     public string Instructions { get; init; } = Placeholder;
 
-    public static OrchestratorAgentConfig Load(string path)
+    public static RemediationAgentConfig Load(string path)
     {
         var json = File.ReadAllText(path);
-        return JsonSerializer.Deserialize<OrchestratorAgentConfig>(
+        return JsonSerializer.Deserialize<RemediationAgentConfig>(
             json,
             new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
             ?? throw new InvalidOperationException($"Could not parse {path}.");

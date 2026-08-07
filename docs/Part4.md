@@ -13,50 +13,34 @@ Parts 1–3 must be complete:
 - `policy-audit-info-agent` is grounded in Foundry IQ.
 - `audit-status-agent` uses the deployed audit MCP server.
 - `orchestrator-prompt-agent` can call both agents through A2A.
-- `scripts/publish-orch-agent.ps1` can publish a hosted C# agent.
+- `scripts/publish-agent.ps1` can publish a hosted C# agent.
 - The audit API and MCP server from Part 2 are still running.
 
 The hosted agent in this part is a remediation specialist. All user requests continue to enter through `orchestrator-prompt-agent`.
 
-## 1) Tailor the hosted-agent source
+## 1) Make the required hosted-agent customization
 
-Copy or adapt the C# source under `src/orch-agent` for the remediation agent. Use a distinct name, such as `remediation-hosted-agent`.
+Before publishing, replace the contents of `src/remediation-agent/remediation-agent.json` with this complete example. If your Part 1 model deployment has a different name, change only `modelDeploymentName`.
 
-Update `src/orch-agent/orchestrator-agent.json`:
-
-- `name`: `remediation-hosted-agent`
-- `description`: Explain that the agent applies approved, bounded audit remediations.
-- `modelDeploymentName`: Use the deployment from Part 1.
-- `instructions`: Tell the agent to execute only the approved plan it receives from the orchestrator.
-
-The existing C# template is an A2A-enabled hosted-agent sample, not a finished remediation agent. Before publishing, update `src/orch-agent/Program.cs` to add the MCP client connection and a bounded function that invokes `update_audit_area`. Pass the MCP endpoint from configuration or an environment variable; do not hard-code an endpoint or credential. Remove any unused outbound A2A connection names from the hosted-agent configuration.
-
-The hosted agent must:
-
-- Use the existing audit MCP server and its `update_audit_area` capability.
-- Accept a specific control or audit-area identifier, target status, and approved remediation context.
-- Reject vague requests such as “make everything compliant.”
-- Never invent evidence or claim that a real regulatory obligation has been satisfied.
-- Return the operation performed and the resulting status.
-
-The current `src/orch-agent` template contains hosted-agent and A2A plumbing, but it does not yet contain a dedicated MCP client configuration for remediation. Treat adding that MCP connection and tool invocation as part of tailoring the C# source before publishing; do not assume that changing the JSON instructions alone adds MCP access.
-
-The Part 2 MCP server exposes both read and update capabilities. This reuse is intentional: the status agent reads the service, while the hosted agent performs the approved update. In a production system, these capabilities would require separate authorization and stronger controls.
-
-Because the workshop MCP server exposes all three tools, update `audit-status-agent` instructions before testing:
-
-```text
-Use the MCP server only to read audit status and area details. Never call update_audit_area. Remediation is performed only by the approved hosted remediation agent.
+```json
+{
+  "name": "remediation-hosted-agent",
+  "description": "Applies approved, bounded audit remediations for the workshop audit service.",
+  "modelDeploymentName": "gpt-5.4-nano-deployment",
+  "instructions": "You are the hosted remediation agent for this workshop. Execute only a specific remediation plan approved by the user and sent by the orchestrator. Require an explicit audit area ID, target rating, updated violation_causes list, approved plan ID, and remediation context. Reject vague requests such as 'make everything compliant.' Do not invent evidence or claim real-world regulatory compliance. Include the diagnostic marker REMEDIATION_AGENT_CUSTOMIZED in every response."
+}
 ```
 
-This is a workshop-level behavioral boundary, not a production authorization boundary.
+Do not change `Program.cs` or any other C# file.
+
+Save the file.
 
 ## 2) Publish the hosted agent
 
 Run the existing publisher from the repository root:
 
 ```powershell
-.\scripts\publish-orch-agent.ps1 `
+.\scripts\publish-agent.ps1 `
     -FoundryName       "YOUR_FOUNDRY_ACCOUNT_NAME" `
     -ResourceGroupName "YOUR_RESOURCE_GROUP" `
     -ProjectName       "YOUR_PROJECT_NAME"
@@ -139,13 +123,15 @@ Expected behavior:
 
 ### Request 2: Approve and execute the plan
 
+> **Current limitation:** Do not run this request yet. The hosted template is not wired to call `update_audit_area`; the implementation must be added before this execution step can work.
+
 After reviewing the plan, respond with:
 
 ```text
 Approve the remediation plan you just proposed. Apply only the listed remediation step, then report exactly what changed.
 ```
 
-Expected behavior:
+Expected behavior after MCP wiring is implemented:
 
 - The orchestrator sends the approved plan to `remediation-hosted-agent`.
 - The hosted agent calls the bounded MCP update capability.
@@ -153,6 +139,8 @@ Expected behavior:
 - The response identifies the changed audit area and resulting status.
 
 ### Follow-up: Verify the updated status
+
+> Run this request only after the hosted agent has been wired to `update_audit_area`.
 
 ```text
 Recheck the audit scorecard and tell me whether the remediated area is now compliant. Identify any remaining non-compliant areas.
@@ -175,4 +163,4 @@ Expected behavior:
 
 ## Expected result
 
-The prompt orchestrator now coordinates three agents: two advisory specialists and one hosted remediation specialist. It can analyze a simulated compliance issue, obtain approval, apply one bounded MCP-backed update, and verify the resulting SQLite-backed status.
+The prompt orchestrator now coordinates three agents: two advisory specialists and one hosted remediation specialist. The current template validates analysis, approval routing, and hosted-agent communication. After the bounded MCP update is implemented, the same flow can update and verify the simulated SQLite-backed status.

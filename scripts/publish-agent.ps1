@@ -1,7 +1,7 @@
 #!/usr/bin/env pwsh
 
 param(
-    [string]$ConfigPath = "src/orch-agent/orchestrator-agent.json",
+    [string]$ConfigPath = "src/remediation-agent/remediation-agent.json",
     [string]$FoundryName,
     [string]$ResourceGroupName,
     [string]$ProjectName,
@@ -11,7 +11,7 @@ param(
 $ErrorActionPreference = "Stop"
 
 $repoRoot = Split-Path $PSScriptRoot -Parent
-$projectPath = Join-Path $repoRoot "src" "orch-agent" "orch-agent.csproj"
+$projectPath = Join-Path $repoRoot "src" "remediation-agent" "remediation-agent.csproj"
 $publisherPath = Join-Path $PSScriptRoot "orch-agent-publisher" "OrchAgentPublisher.csproj"
 
 if (-not [System.IO.Path]::IsPathRooted($ConfigPath)) {
@@ -256,7 +256,7 @@ if ($configuredA2aConnections.Count -gt 0) {
     }
 }
 
-$tempPublishRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("orch-agent-publish-" + [System.Guid]::NewGuid().ToString("N"))
+$tempPublishRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("remediation-agent-publish-" + [System.Guid]::NewGuid().ToString("N"))
 New-Item -ItemType Directory -Path $tempPublishRoot | Out-Null
 
 try {
@@ -268,16 +268,16 @@ try {
         -o $tempPublishRoot `
         --nologo
     if ($LASTEXITCODE -ne 0) {
-        Write-Host "Error: Orchestrator agent publish failed." -ForegroundColor Red
+        Write-Host "Error: Remediation agent publish failed." -ForegroundColor Red
         exit $LASTEXITCODE
     }
 
-    if (-not (Test-Path (Join-Path $tempPublishRoot "orchestrator-agent.json"))) {
-        Write-Host "Error: Published output is missing orchestrator-agent.json." -ForegroundColor Red
+    if (-not (Test-Path (Join-Path $tempPublishRoot "remediation-agent.json"))) {
+        Write-Host "Error: Published output is missing remediation-agent.json." -ForegroundColor Red
         exit 1
     }
 
-    $publishedConfigPath = Join-Path $tempPublishRoot "orchestrator-agent.json"
+    $publishedConfigPath = Join-Path $tempPublishRoot "remediation-agent.json"
     $publishedConfig = Get-Content $publishedConfigPath -Raw | ConvertFrom-Json
     $publishedConfig | Add-Member -NotePropertyName "projectEndpoint" -NotePropertyValue $ProjectEndpoint -Force
 
@@ -291,14 +291,14 @@ try {
             -AzCommand $az
         if ($resolvedIds.Count -gt 0) {
             $publishedConfig | Add-Member -NotePropertyName "a2aConnectionIds" -NotePropertyValue $resolvedIds -Force
-            Write-Host "Injected $($resolvedIds.Count) A2A connection ARM ID(s) into published orchestrator-agent.json." -ForegroundColor DarkGray
+            Write-Host "Injected $($resolvedIds.Count) A2A connection ARM ID(s) into published remediation-agent.json." -ForegroundColor DarkGray
         } else {
             Write-Host "Warning: No A2A connection ARM IDs were resolved. Runtime will fall back to GetConnection (may fail without elevated permissions)." -ForegroundColor Yellow
         }
     }
 
     $publishedConfig | ConvertTo-Json -Depth 20 | Set-Content -Path $publishedConfigPath -Encoding UTF8
-    Write-Host "Injected project endpoint into published orchestrator-agent.json." -ForegroundColor DarkGray
+    Write-Host "Injected project endpoint into published remediation-agent.json." -ForegroundColor DarkGray
 
     Write-Host "Publishing hosted agent to Foundry..." -ForegroundColor Yellow
     dotnet run `
