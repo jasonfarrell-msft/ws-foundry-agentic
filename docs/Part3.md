@@ -99,26 +99,24 @@ The portal does not provide a reliable connected/ready indicator for this step. 
 3. Use your model deployment from Part 1.
 4. Set the system instructions similar to:
 
-```text
-You are an orchestration prompt agent for oil and gas policy and audit workflows.
-
-You have access to two specialized agents:
-- audit-status-agent: live compliance scorecard ratings and root-cause violations.
-- policy-audit-info-agent: policy/regulatory requirements and required audit evidence, grounded in its knowledge base with citations.
-
-Routing rules:
-Before selecting a tool, apply this scope gate:
-1. Treat a request as in scope only when it concerns oil-and-gas policy, compliance, audits, controls, evidence, findings, scores, status, remediation, or regulatory interpretation.
-2. Treat software, coding, web-server setup, infrastructure, math, finance, and other non-audit or non-policy requests as out of scope.
-3. If a request mixes an in-scope subject with an out-of-scope task, classify the entire request as out of scope.
-4. For an out-of-scope request, do not call any tool or A2A agent. Reply exactly: `I only handle oil-and-gas policy, compliance, and audit questions.`
-
-After the scope gate passes:
-5. Questions about live status, scores, findings, or remediation status -> `audit-status-agent`
-6. Questions about policy, regulations, controls, or required evidence -> `policy-audit-info-agent`
-7. Questions requiring both operational status and regulatory interpretation -> call both and synthesize
-8. When using policy content, preserve citations
-```
+> You are an orchestration prompt agent for oil and gas policy and audit workflows.
+>
+> You have access to two specialized agents:
+> - audit-status-agent: live compliance scorecard ratings and root-cause violations.
+> - policy-audit-info-agent: policy/regulatory requirements and required audit evidence, grounded in its knowledge base with citations.
+>
+> Routing rules:
+> Before selecting a tool, apply this scope gate:
+> 1. Treat a request as in scope only when it concerns oil-and-gas policy, compliance, audits, controls, evidence, findings, scores, status, remediation, or regulatory interpretation.
+> 2. Treat software, coding, web-server setup, infrastructure, math, finance, and other non-audit or non-policy requests as out of scope.
+> 3. If a request mixes an in-scope subject with an out-of-scope task, classify the entire request as out of scope.
+> 4. For an out-of-scope request, do not call any tool or A2A agent. Reply exactly: I only handle oil-and-gas policy, compliance, and audit questions.
+>
+> After the scope gate passes:
+> 5. Questions about live status, scores, findings, or remediation status -> audit-status-agent.
+> 6. Questions about policy, regulations, controls, or required evidence -> policy-audit-info-agent.
+> 7. Questions requiring both operational status and regulatory interpretation -> call both and synthesize.
+> 8. When using policy content, preserve citations.
 
 ### Grant the orchestrator identity A2A access
 
@@ -168,18 +166,14 @@ The A2A tool accepts the target agent's **base A2A endpoint**. Do not append the
 4. Select **A2A**
 5. A form appears. Fill in the following:
    - **A2A Agent Endpoint:** Paste the first **base A2A URL** (saved from Step 1):
-     ```
-     https://{foundry-account}.services.ai.azure.com/api/projects/{project}/agents/audit-status-agent/endpoint/protocols/a2a
-     ```
+     > https://{foundry-account}.services.ai.azure.com/api/projects/{project}/agents/audit-status-agent/endpoint/protocols/a2a
    - **Auth type:** Select **Agent Identity**
    - **Audience:** `https://ai.azure.com`
    - **Agent card path:** `agentCard/v1.0`
 6. Click **Add** or **Confirm**
 7. Repeat steps 1–4, then fill in:
    - **A2A Agent Endpoint:** Paste the second **base A2A URL**:
-     ```
-     https://{foundry-account}.services.ai.azure.com/api/projects/{project}/agents/policy-audit-info-agent/endpoint/protocols/a2a
-     ```
+     > https://{foundry-account}.services.ai.azure.com/api/projects/{project}/agents/policy-audit-info-agent/endpoint/protocols/a2a
    - **Auth type:** Select **Agent Identity**
    - **Audience:** `https://ai.azure.com`
    - **Agent card path:** `agentCard/v1.0`
@@ -204,9 +198,7 @@ Response text alone is not sufficient to verify routing.
 
 **Expected primary routing:** `audit-status-agent` (verify in trace)
 
-```text
-What are our current compliance scores across all audit areas? Which areas are non-compliant?
-```
+> What are our current compliance scores across all audit areas? Which areas are non-compliant?
 
 Validation:
 
@@ -218,9 +210,7 @@ Validation:
 
 **Expected primary routing:** `policy-audit-info-agent` (verify in trace)
 
-```text
-According to the corpus, what SPCC plan maintenance, secondary containment, and training requirements apply to a compressor station, and what audit evidence should we collect?
-```
+> According to the corpus, what SPCC plan maintenance, secondary containment, and training requirements apply to a compressor station, and what audit evidence should we collect?
 
 Validation:
 
@@ -233,9 +223,7 @@ Validation:
 
 **Expected primary routing:** Both agents (verify in trace)
 
-```text
-Our PSM Program Controls area is currently Non-compliant. What root-cause violations are driving that rating, and according to the corpus what PSM-1910.119 audit evidence should we gather?
-```
+> Our PSM Program Controls area is currently Non-compliant. What root-cause violations are driving that rating, and according to the corpus what PSM-1910.119 audit evidence should we gather?
 
 Validation:
 
@@ -248,9 +236,7 @@ Validation:
 
 **Expected primary routing:** Neither agent (refusal; verify no A2A tool call)
 
-```text
-How do I set up a Python Flask web server?
-```
+> How do I set up a Python Flask web server?
 
 Validation:
 
@@ -263,9 +249,7 @@ Validation:
 
 **Expected primary routing:** Both agents (verify in trace)
 
-```text
-We have a finding in an environmental control area. What root-cause violations are driving this finding, and what corpus-grounded audit evidence should we gather to demonstrate remediation?
-```
+> We have a finding in an environmental control area. What root-cause violations are driving this finding, and what corpus-grounded audit evidence should we gather to demonstrate remediation?
 
 Validation:
 

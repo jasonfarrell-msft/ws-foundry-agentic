@@ -10,6 +10,8 @@ using Microsoft.Agents.AI;
 using Microsoft.Agents.AI.Foundry;
 using Microsoft.Agents.AI.Foundry.Hosting;
 using Microsoft.Extensions.AI;
+using ModelContextProtocol.Client;
+using ModelContextProtocol.Protocol;
 
 Env.NoClobber().TraversePath().Load();
 
@@ -20,7 +22,7 @@ Console.WriteLine("[BOOT] Remediation agent startup marker: v26-a2a-auth-fix");
 Console.WriteLine($"[BOOT] FOUNDRY_HOSTING_ENVIRONMENT={Environment.GetEnvironmentVariable("FOUNDRY_HOSTING_ENVIRONMENT") ?? "(null)"}");
 Console.WriteLine($"[BOOT] FOUNDRY_AGENT_NAME={Environment.GetEnvironmentVariable("FOUNDRY_AGENT_NAME") ?? "(null)"}");
 Console.WriteLine($"[BOOT] FOUNDRY_AGENT_VERSION={Environment.GetEnvironmentVariable("FOUNDRY_AGENT_VERSION") ?? "(null)"}");
-var diagnosticsEnabled = !string.Equals(Environment.GetEnvironmentVariable("ORCH_DIAGNOSTICS"), "0", StringComparison.OrdinalIgnoreCase);
+var diagnosticsEnabled = string.Equals(Environment.GetEnvironmentVariable("ORCH_DIAGNOSTICS"), "1", StringComparison.OrdinalIgnoreCase);
 
 var projectEndpointStr =
     Environment.GetEnvironmentVariable("FOUNDRY_PROJECT_ENDPOINT")
@@ -53,6 +55,107 @@ if (!string.IsNullOrWhiteSpace(projectEndpointStr))
 // ---------------------------------------------------------------------------
 var a2aCredential = new DefaultAzureCredential();
 var a2aTools = new List<AITool>();
+var mcpServerUrl =
+    Environment.GetEnvironmentVariable("AUDIT_MCP_SERVER_URL")
+    ?? config.McpServerUrl;
+var mcpTools = new List<AITool>();
+McpClient? mcpClient = null;
+HttpClientTransport? mcpTransport = null;
+var allowedAuditAreas = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+{
+    "spcc-compliance",
+    "psm-program",
+    "subpart-w-ghg",
+    "rcra-waste",
+    "pipeline-safety",
+    "environmental-controls",
+    "incident-corrective"
+};
+
+if (!string.IsNullOrWhiteSpace(mcpServerUrl))
+{
+    if (!Uri.TryCreate(mcpServerUrl, UriKind.Absolute, out var mcpEndpoint)
+        || mcpEndpoint.Scheme is not ("http" or "https"))
+    {
+        throw new InvalidOperationException("McpServerUrl must be an absolute HTTP or HTTPS URL.");
+    }
+
+    for (var attempt = 1; attempt <= 3; attempt++)
+    {
+        var candidateTransport = new HttpClientTransport(new HttpClientTransportOptions
+        {
+            Endpoint = mcpEndpoint,
+            TransportMode = HttpTransportMode.StreamableHttp
+        });
+
+        try
+        {
+            mcpClient = await McpClient.CreateAsync(candidateTransport);
+            mcpTransport = candidateTransport;
+            break;
+        }
+        catch when (attempt < 3)
+        {
+            await candidateTransport.DisposeAsync();
+            await Task.Delay(TimeSpan.FromSeconds(attempt * 2));
+        }
+    }
+
+    if (mcpClient is null || mcpTransport is null)
+        throw new InvalidOperationException("Could not connect to the audit MCP server after three attempts.");
+
+    Console.WriteLine($"[MCP] Connected to audit server at {mcpEndpoint}");
+
+    var capturedMcpClient = mcpClient;
+    var remediationTool = AIFunctionFactory.Create(
+        async ([System.ComponentModel.Description("Approved audit area ID, for example psm-program.")] string area_id,
+               [System.ComponentModel.Description("Target simulated rating. Use Compliant only for this workshop remediation.")] string rating,
+               [System.ComponentModel.Description("The updated list of remaining violation causes.")] string[] violation_causes,
+               [System.ComponentModel.Description("The plan ID returned by the orchestrator.")] string plan_id,
+               [System.ComponentModel.Description("The policy and audit context from the approved plan.")] string remediation_context,
+               [System.ComponentModel.Description("Must be exactly Approved.")] string approval_confirmation,
+               CancellationToken ct) =>
+        {
+            if (!string.Equals(approval_confirmation.Trim(), "Approved", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("Remediation requires explicit approval.");
+            if (string.IsNullOrWhiteSpace(plan_id))
+                throw new InvalidOperationException("Remediation requires a non-empty plan ID.");
+            if (string.IsNullOrWhiteSpace(remediation_context))
+                throw new InvalidOperationException("Remediation requires policy and audit context.");
+            if (!string.Equals(rating.Trim(), "Compliant", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException("This workshop tool only supports the target rating Compliant.");
+            if (!allowedAuditAreas.Contains(area_id))
+                throw new InvalidOperationException($"Audit area '{area_id}' is not allowlisted.");
+            if (violation_causes.Length != 0)
+                throw new InvalidOperationException("A Compliant audit area must have an empty violation_causes list.");
+
+            var result = await capturedMcpClient.CallToolAsync(
+                "update_audit_area",
+                new Dictionary<string, object?>
+                {
+                    ["area_id"] = area_id,
+                    ["rating"] = "Compliant",
+                    ["violation_causes"] = violation_causes
+                },
+                cancellationToken: ct);
+
+            if (result.IsError == true)
+                throw new InvalidOperationException($"MCP remediation failed for plan '{plan_id}'.");
+
+            var responseText = string.Join(
+                "\n",
+                result.Content.OfType<TextContentBlock>().Select(content => content.Text));
+            return $"Plan {plan_id} applied to {area_id}. MCP result: {responseText}";
+        },
+        name: "apply_approved_remediation",
+        description: "Apply one explicitly approved, bounded remediation to the simulated audit service.");
+    mcpTools.Add(remediationTool);
+}
+else
+{
+    throw new InvalidOperationException(
+        "No audit MCP server URL configured. Pass -McpServerUrl when publishing the remediation agent.");
+}
 
 if (!string.IsNullOrWhiteSpace(projectEndpointStr))
 {
@@ -163,14 +266,15 @@ try
 {
     if (projectClient != null)
     {
-        IList<AITool>? tools = a2aTools.Count > 0 ? a2aTools : null;
+        var allTools = a2aTools.Concat(mcpTools).ToList();
+        IList<AITool>? tools = allTools.Count > 0 ? allTools : null;
         agent = projectClient.AsAIAgent(
             model: config.ModelDeploymentName,
             instructions: config.Instructions,
             name: config.Name,
             description: config.Description,
             tools: tools);
-        var toolSummary = a2aTools.Count > 0 ? $" ({a2aTools.Count} A2A tool(s))" : " (no A2A tools)";
+        var toolSummary = $" ({a2aTools.Count} A2A tool(s), {mcpTools.Count} MCP tool(s))";
         Console.WriteLine($"[OK] Agent initialized with Foundry context{toolSummary}.");
     }
     else
@@ -331,6 +435,8 @@ internal sealed record RemediationAgentConfig
     /// <summary>Optional. One or more RemoteA2A connection names created by enable-a2a.ps1.</summary>
     public IReadOnlyList<string>? A2aConnectionNames { get; init; }
 
+    public string? McpServerUrl { get; init; }
+
     /// <summary>
     /// Optional. Pre-resolved ARM resource IDs for RemoteA2A connections, injected by
     /// publish-agent.ps1 at publish time. When present, the runtime skips the
@@ -347,6 +453,7 @@ internal sealed record RemediationAgentConfig
         {
             throw new InvalidOperationException($"Missing config file: {path}");
         }
+
 
         var json = File.ReadAllText(path);
         return System.Text.Json.JsonSerializer.Deserialize<RemediationAgentConfig>(

@@ -27,7 +27,8 @@ Before publishing, replace the contents of `src/remediation-agent/remediation-ag
   "name": "remediation-hosted-agent",
   "description": "Applies approved, bounded audit remediations for the workshop audit service.",
   "modelDeploymentName": "gpt-5.4-nano-deployment",
-  "instructions": "You are the hosted remediation agent for this workshop. Execute only a specific remediation plan approved by the user and sent by the orchestrator. Require an explicit audit area ID, target rating, updated violation_causes list, approved plan ID, and remediation context. Reject vague requests such as 'make everything compliant.' Do not invent evidence or claim real-world regulatory compliance. Include the diagnostic marker REMEDIATION_AGENT_CUSTOMIZED in every response."
+  "mcpServerUrl": "",
+  "instructions": "You are the hosted remediation agent for this workshop. Execute only a specific remediation plan approved by the user and sent by the orchestrator. Require the exact allowlisted audit area ID, target rating, updated violation_causes list, approved plan ID, remediation context, and approval_confirmation set to Approved. Reject vague requests such as 'make everything compliant.' Use the apply_approved_remediation tool for the bounded update; never claim a change without a successful tool result. Do not invent evidence or claim real-world regulatory compliance. Include the diagnostic marker REMEDIATION_AGENT_CUSTOMIZED in every response."
 }
 ```
 
@@ -43,10 +44,11 @@ Run the existing publisher from the repository root:
 .\scripts\publish-agent.ps1 `
     -FoundryName       "YOUR_FOUNDRY_ACCOUNT_NAME" `
     -ResourceGroupName "YOUR_RESOURCE_GROUP" `
-    -ProjectName       "YOUR_PROJECT_NAME"
+    -ProjectName       "YOUR_PROJECT_NAME" `
+    -McpServerUrl      "YOUR_MCP_SERVER_URL"
 ```
 
-The script builds the C# project, injects the Foundry project endpoint, and publishes the package as a hosted agent. Confirm that `remediation-hosted-agent` appears in the Foundry project and responds to a simple test request.
+Use the MCP server URL printed by `scripts/deploy-mcp.ps1` in Part 2. The script builds the C# project, injects the Foundry project endpoint and MCP server URL, and publishes the package as a hosted agent. Confirm that `remediation-hosted-agent` appears in the Foundry project and responds to a simple test request.
 
 If the publisher reports a missing hosted-agent identity or RBAC prerequisite, follow the command printed by the script before continuing.
 
@@ -77,32 +79,59 @@ Use the A2A base endpoint printed by `enable-a2a.ps1` when configuring the orche
 
 ## 4) Add the third A2A connection to the orchestrator
 
-Open `orchestrator-prompt-agent` in Foundry and add a third tool using **Add → Add Tools → Custom → A2A**.
+### Replace the orchestrator prompt
 
-Configure:
+In `orchestrator-prompt-agent`, replace the system instructions with:
 
-- **Endpoint:** The hosted agent's base endpoint ending in `/endpoint/protocols/a2a`
-- **Authentication:** Agent Identity
-- **Audience:** `https://ai.azure.com`
-- **Card path:** `agentCard/v1.0` when the dialog exposes a card-path field
+> You are Orchestrator Prompt Agent v2 for an oil-and-gas audit workshop.
+>
+> Workshop POC disclaimer:
+> This is a conceptual proof of concept. The audit data and remediation actions are simulated for learning. Do not provide legal advice, certify regulatory compliance, or claim production authorization.
+>
+> You have access to three A2A agents:
+> - audit-status-agent: live simulated audit status, scorecard ratings, findings, and root-cause violations.
+> - policy-audit-info-agent: policy, regulatory, control, evidence, and audit requirements grounded in its knowledge base with citations.
+> - remediation-hosted-agent: applies only an explicitly approved, bounded remediation plan in the simulated workshop environment.
+>
+> Scope gate:
+> 1. Treat a request as in scope only when it concerns oil-and-gas policy, compliance, audits, controls, evidence, findings, scores, status, remediation, or regulatory interpretation.
+> 2. Treat software, coding, infrastructure, general math, finance, legal advice, production authorization, and unrelated requests as out of scope.
+> 3. If a request mixes an in-scope subject with an out-of-scope task, classify the entire request as out of scope.
+> 4. For an out-of-scope request, do not call any tool or A2A agent. Reply exactly: I only handle oil-and-gas policy, compliance, and audit questions.
+>
+> Routing rules:
+> 1. For live status, scorecard, current rating, finding, root-cause, or remediation-status questions, call audit-status-agent.
+> 2. For policy, regulation, control, audit evidence, or corpus-grounded requirement questions, call policy-audit-info-agent.
+> 3. For questions requiring both operational status and policy interpretation, call both audit-status-agent and policy-audit-info-agent, then synthesize the answer. Preserve policy citations.
+> 4. For remediation requests, always gather current status from audit-status-agent and applicable policy or evidence requirements from policy-audit-info-agent before proposing any remediation.
+> 5. For remediation requests, produce one concise remediation plan before execution. The plan must include: plan ID; the exact allowlisted audit area ID; current rating or finding summary; root-cause violations to address; policy or evidence basis, including citations when provided; proposed bounded action; target simulated rating or outcome; updated violation_causes list; and remediation context.
+> 6. After presenting a remediation plan, wait for explicit user approval before calling remediation-hosted-agent.
+> 7. Explicit approval must clearly approve the proposed plan, such as “Approve this plan,” “Approved,” or “Approve plan <plan ID>.” If approval is ambiguous, ask for clarification and do not call remediation-hosted-agent.
+> 8. When approval is received, call remediation-hosted-agent with only the approved plan and bounded action details. Include the plan ID, exact audit area ID, target rating, updated violation_causes list, remediation context, and `approval_confirmation: Approved`.
+> 9. After remediation-hosted-agent responds, call audit-status-agent again to verify the result with a fresh status check.
+> 10. In the final response after remediation, summarize what was approved, what the remediation agent reported, the fresh status result, any remaining non-compliant areas, and the workshop POC disclaimer.
+>
+> Never call remediation-hosted-agent before explicit approval.
+> Never remediate vague requests such as “make everything compliant.”
+> Never invent policy citations, audit evidence, status values, or remediation results.
 
-The orchestrator must now have exactly three A2A connections:
+### Add the third A2A connection
 
-1. `audit-status-agent`
-2. `policy-audit-info-agent`
-3. `remediation-hosted-agent`
+In the Foundry editor for `orchestrator-prompt-agent`:
 
-Keep Web Search removed. Confirm that the orchestrator identity can consume all three target agents before testing.
+1. Click **Add**.
+2. Select **Add Tools**.
+3. Open the **Custom** tab.
+4. Select **A2A**.
+5. Configure:
+   - **A2A Agent Endpoint:**
+     > https://{foundry-account}.services.ai.azure.com/api/projects/{project}/agents/remediation-hosted-agent/endpoint/protocols/a2a
+   - **Auth type:** **Agent Identity**
+   - **Audience:** `https://ai.azure.com`
+   - **Agent card path:** `agentCard/v1.0`
+6. Click **Add** or **Confirm**.
 
-Update the orchestrator instructions so that:
-
-- Status questions call `audit-status-agent`.
-- Policy and evidence questions call `policy-audit-info-agent`.
-- Remediation requests call the status and policy agents first.
-- The orchestrator creates a concise plan and asks for approval before calling `remediation-hosted-agent`.
-- The hosted agent receives only the approved plan and bounded action details.
-- The orchestrator reruns the status check after remediation.
-- Out-of-scope requests do not call any agent.
+Use the base endpoint in the endpoint field; do not append the card path. Keep Web Search removed.
 
 ## 5) Validate the complete workflow
 
@@ -110,9 +139,7 @@ Use the following requests in the `orchestrator-prompt-agent` playground. Inspec
 
 ### Request 1: Analyze and propose a plan
 
-```text
-Review our current audit scorecard and identify the non-compliant areas. Use the policy corpus to explain the relevant evidence gaps, then produce a concise remediation plan for the highest-priority area. Do not change any data and do not call the remediation agent yet. Include a plan ID and wait for my approval.
-```
+> Review the PSM Program Controls audit area. Confirm its current rating and root-cause violations from `audit-status-agent`, then use the policy corpus to explain the related PSM-1910.119 evidence gaps. Produce one concise remediation plan for this area only: target the simulated rating `Compliant`, remove the listed violation causes, and identify the evidence that would normally support the change. Do not change any data and do not call the remediation agent yet. Include a plan ID and wait for my approval.
 
 Expected behavior:
 
@@ -123,28 +150,22 @@ Expected behavior:
 
 ### Request 2: Approve and execute the plan
 
-> **Current limitation:** Do not run this request yet. The hosted template is not wired to call `update_audit_area`; the implementation must be added before this execution step can work.
-
 After reviewing the plan, respond with:
 
-```text
-Approve the remediation plan you just proposed. Apply only the listed remediation step, then report exactly what changed.
-```
+> Approve the PSM remediation plan you just proposed. Apply only that plan to the simulated audit service, then report exactly what changed.
 
-Expected behavior after MCP wiring is implemented:
+Expected behavior:
 
 - The orchestrator sends the approved plan to `remediation-hosted-agent`.
-- The hosted agent calls the bounded MCP update capability.
+- The hosted agent calls `apply_approved_remediation`, which invokes the bounded MCP `update_audit_area` tool.
 - The SQLite-backed audit status is updated.
 - The response identifies the changed audit area and resulting status.
 
+> **POC boundary:** The approval gate in this workshop is demonstrated through orchestrator instructions and the hosted tool's explicit approval field. It is not a production authorization mechanism.
+
 ### Follow-up: Verify the updated status
 
-> Run this request only after the hosted agent has been wired to `update_audit_area`.
-
-```text
-Recheck the audit scorecard and tell me whether the remediated area is now compliant. Identify any remaining non-compliant areas.
-```
+> Recheck the audit scorecard and tell me whether the remediated area is now compliant. Identify any remaining non-compliant areas.
 
 Expected behavior:
 
@@ -153,14 +174,6 @@ Expected behavior:
 - The remediated area reflects the simulated change.
 - Any remaining findings are reported without claiming complete real-world compliance.
 
-## 6) Troubleshooting
-
-- **401 or 404 when adding the hosted agent:** verify A2A is enabled, use the `services.ai.azure.com` base endpoint, set the card path to `agentCard/v1.0`, and verify Agent Identity RBAC.
-- **The hosted agent is called before approval:** strengthen the orchestrator instructions and retest Request 1.
-- **The hosted agent changes the wrong area:** require an explicit allowlisted area ID and approved plan ID.
-- **The follow-up status is unchanged:** inspect the hosted-agent trace, MCP update call, and audit API logs.
-- **The hosted agent claims compliance without an update:** treat the result as a failure; the final status must come from a fresh `audit-status-agent` query.
-
 ## Expected result
 
-The prompt orchestrator now coordinates three agents: two advisory specialists and one hosted remediation specialist. The current template validates analysis, approval routing, and hosted-agent communication. After the bounded MCP update is implemented, the same flow can update and verify the simulated SQLite-backed status.
+The prompt orchestrator now coordinates three agents: two advisory specialists and one hosted remediation specialist. The hosted agent validates explicit approval and applies the bounded change through the Part 2 MCP server, after which the orchestrator verifies the simulated SQLite-backed status with a fresh status request.

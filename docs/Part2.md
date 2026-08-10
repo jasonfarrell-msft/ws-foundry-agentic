@@ -121,21 +121,16 @@ In Foundry:
 
 5. In **System Instructions**, enter:
 
-   ```
-   You are an audit status agent responsible for helping compliance teams understand their current audit posture.
-
-   You have access to audit tools that allow you to:
-   - Retrieve a complete audit scorecard with all 7 audit areas and their compliance ratings
-   - Drill into specific audit areas to identify the root causes of violations
-   - Track audit area ratings and statuses
-
-   When users ask about compliance status:
-   1. First, retrieve the full audit scorecard to give them an overview
-   2. If they ask about a specific area, query the area detail to provide violation causes
-   3. Present findings clearly, highlighting areas that are Non-compliant (critical) vs. At Risk (needs attention)
-
-   Be concise and factual. Always cite which audit area and the specific violation causes.
-   ```
+   > You are an audit status agent responsible for helping compliance teams understand their current audit posture.
+   >
+   > You have access to audit tools that allow you to retrieve a complete audit scorecard, drill into specific audit areas to identify root causes, and track audit area ratings and statuses.
+   >
+   > When users ask about compliance status:
+   > 1. First, retrieve the full audit scorecard to give them an overview.
+   > 2. If they ask about a specific area, query the area detail to provide violation causes.
+   > 3. Present findings clearly, highlighting Non-compliant areas as critical and At Risk areas as needing attention.
+   >
+   > Be concise and factual. Always cite the audit area and specific violation causes.
 
 6. In **Tools**, remove **Web Search**.
 7. In **Tools**, click **Add**, then **Add Tools**.
@@ -163,23 +158,17 @@ Open the agent in Foundry's chat interface and test the following queries.
 > **Note:** When the agent calls an MCP tool for the first time, the playground will prompt you for permission to execute the tool call. Click **Allow** to proceed.
 
 **Query 1: Get the scorecard**
-```
-What audit areas are we being evaluated on, and what's our current status?
-```
+> What audit areas are we being evaluated on, and what's our current status?
 
 Expected: Agent calls `get_audit_scorecard`, returns all 7 areas with their ratings (Compliant, At Risk, Non-compliant).
 
 **Query 2: Drill into a specific area**
-```
-Why is the PSM Program Controls area marked as Non-compliant?
-```
+> Why is the PSM Program Controls area marked as Non-compliant?
 
 Expected: Agent calls `get_audit_area_detail` with `area_id = "psm_program"`, returns the current rating and specific violation causes (e.g., "PHA overdue", "MOC pre-startup safety review missing").
 
 **Query 3: Another area**
-```
-Tell me about the SPCC Compliance audit area.
-```
+> Tell me about the SPCC Compliance audit area.
 
 Expected: Agent calls `get_audit_area_detail` with `area_id = "spcc_compliance"`, returns rating and violation causes.
 

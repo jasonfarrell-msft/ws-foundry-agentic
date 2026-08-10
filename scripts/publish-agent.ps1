@@ -5,7 +5,8 @@ param(
     [string]$FoundryName,
     [string]$ResourceGroupName,
     [string]$ProjectName,
-    [string]$ProjectEndpoint
+    [string]$ProjectEndpoint,
+    [string]$McpServerUrl
 )
 
 $ErrorActionPreference = "Stop"
@@ -197,6 +198,11 @@ if (-not $ProjectEndpoint) {
     $ProjectEndpoint = "{0}/api/projects/{1}" -f $accountEndpoint.TrimEnd('/'), $ProjectName
 }
 
+if ([string]::IsNullOrWhiteSpace($McpServerUrl)) {
+    Write-Host "Error: Provide -McpServerUrl using the endpoint printed by scripts/deploy-mcp.ps1." -ForegroundColor Red
+    exit 1
+}
+
 $projectScope = $null
 if ($az -and $FoundryName -and $ResourceGroupName -and $ProjectName) {
     $subscriptionId = & $az.Source account show --query id --output tsv --only-show-errors 2>&1
@@ -280,6 +286,9 @@ try {
     $publishedConfigPath = Join-Path $tempPublishRoot "remediation-agent.json"
     $publishedConfig = Get-Content $publishedConfigPath -Raw | ConvertFrom-Json
     $publishedConfig | Add-Member -NotePropertyName "projectEndpoint" -NotePropertyValue $ProjectEndpoint -Force
+    if (-not [string]::IsNullOrWhiteSpace($McpServerUrl)) {
+        $publishedConfig | Add-Member -NotePropertyName "mcpServerUrl" -NotePropertyValue $McpServerUrl.TrimEnd('/') -Force
+    }
 
     # Resolve A2A connection ARM IDs at publish time so the runtime can use them
     # directly without calling GetConnection (which requires elevated permissions).
@@ -299,6 +308,9 @@ try {
 
     $publishedConfig | ConvertTo-Json -Depth 20 | Set-Content -Path $publishedConfigPath -Encoding UTF8
     Write-Host "Injected project endpoint into published remediation-agent.json." -ForegroundColor DarkGray
+    if (-not [string]::IsNullOrWhiteSpace($McpServerUrl)) {
+        Write-Host "Injected audit MCP server URL into published remediation-agent.json." -ForegroundColor DarkGray
+    }
 
     Write-Host "Publishing hosted agent to Foundry..." -ForegroundColor Yellow
     dotnet run `

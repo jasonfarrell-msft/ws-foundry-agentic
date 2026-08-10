@@ -9,6 +9,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="ModelContextProtocol" Version="1.4.1" />
     <PackageReference Include="Azure.AI.AgentServer.Core" Version="1.0.0-beta.26" />
     <PackageReference Include="Azure.AI.AgentServer.Responses" Version="1.0.0-beta.6" />
     <PackageReference Include="Azure.AI.Projects" Version="2.1.0-beta.4" />
