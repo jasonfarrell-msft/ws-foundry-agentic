@@ -1,15 +1,4 @@
 # Part 2: Model Context Protocol (MCP) & Agent Integration
-
-## Objective
-
-Create a **prompt agent in Foundry that leverages the Model Context Protocol (MCP)** to communicate with an audit API. The agent uses MCP tools to query compliance state and drill into specific audit areas, demonstrating how agents interact with external services through a standardized protocol.
-
-This part covers:
-- Running a deployment script to set up the audit API
-- Building an MCP server that wraps the API with three discoverable tools
-- Creating the **audit-status-agent** that uses MCP for external queries
-- Testing agent-to-MCP-to-API integration
-
 ### Prerequisites & Assumptions
 
 **Assumption: Part 1 is complete.**
@@ -20,7 +9,6 @@ This part covers:
 If you need to set up Part 1 first, refer to `docs/Part1.md`.
 
 ---
-
 ## 1) Deploy the Audit API
 
 Run the `scripts/setup-part2.ps1` script to deploy the audit API. The script handles all infrastructure provisioning and outputs the API URL you'll need for MCP configuration.
@@ -28,23 +16,23 @@ Run the `scripts/setup-part2.ps1` script to deploy the audit API. The script han
 1. Open PowerShell and navigate to the repository root.
 2. Run the deployment script with your initials and resource group name:
 
-   ```powershell
+```powershell
    pwsh scripts/setup-part2.ps1 -Initials "jf" -ResourceGroupName "rg-agent-test-mx01"
-   ```
+```
 
    **Note:** All resources (container registry, container environment, container app) will be created in the same location as the resource group.
 
 3. At the end of the script output, you will see:
 
-   ```
-   ════════════════════════════════════════════════════════════
+```
+  ════════════════════════════════════════════════════════════
    AUDIT API URL (copy and paste into MCP configuration):
    ════════════════════════════════════════════════════════════
 
    https://aca-agentws-api-<initials>-<region>.azurecontainerapps.io
 
    ════════════════════════════════════════════════════════════
-   ```
+```
 
 4. **Copy this URL** — you'll use it when configuring the MCP server.
 
@@ -52,7 +40,14 @@ Run the `scripts/setup-part2.ps1` script to deploy the audit API. The script han
 
 ## 2) Configure and Build the MCP Server
 
-The MCP server is a C# application that exposes three tools to agents. Before building and deploying, you need to copy the tool descriptions into the MCP server source code.
+The MCP server is a C# application that exposes three tools to agents. In this section, you will update the MCP server source code so each tool has a clear description and documented inputs before building and deploying it.
+
+### Update the MCP server source code
+
+1. Open the file **`src/mcp/Program.cs`** in the repository.
+2. Find the `AuditTools` class and update the empty `Description` attributes on the three MCP methods and their parameters.
+3. Use the tool descriptions below as the text to add in `src/mcp/Program.cs`. You are editing the C# source file; do not paste these descriptions into the Foundry portal.
+4. Save `src/mcp/Program.cs` before continuing to the deployment step.
 
 ### Tool Descriptions
 
@@ -65,14 +60,14 @@ The three audit tools are:
 **Tool 2: get_audit_area_detail**
 - **Description:** Retrieve detailed information about a specific audit area, including its current rating and the root causes of any violations
 - **Input:** 
-  - `area_id` (string, required) — The unique identifier for the audit area (e.g., 'spcc_compliance', 'psm_program', 'subpart_w_reporting')
+    - `area_id` (string, required) — The unique identifier for the audit area (e.g., 'spcc_compliance', 'psm_program', 'subpart_w_reporting')
 
 **Tool 3: update_audit_area**
 - **Description:** Update an audit area's compliance rating and violation causes (used for tracking remediation progress)
 - **Input:**
-  - `area_id` (string, required) — The unique identifier for the audit area
-  - `rating` (string, required) — The new compliance rating (Compliant, At Risk, or Non-compliant)
-  - `violation_causes` (array, required) — Updated list of violation causes
+    - `area_id` (string, required) — The unique identifier for the audit area
+    - `rating` (string, required) — The new compliance rating (Compliant, At Risk, or Non-compliant)
+    - `violation_causes` (array, required) — Updated list of violation causes
 
 ### Deploy the MCP Server
 
@@ -80,28 +75,28 @@ Now deploy the MCP server to Azure Container Apps and capture its endpoint URL.
 
 1. Open PowerShell and run the deployment script:
 
-   ```powershell
+```powershell
    pwsh scripts/deploy-mcp.ps1 -Initials "jf" -ResourceGroupName "rg-agent-test-mx01" -ApiUrl "<AUDIT_API_URL_FROM_SETUP_SCRIPT>"
-   ```
+```
 
    Replace:
-   - `jf` with your actual initials
-   - `rg-agent-test-mx01` with the resource group created in Part 1, if you chose a different name
-   - Use the **Audit API URL** from the `setup-part2.ps1` script output
+    - `jf` with your actual initials
+    - `rg-agent-test-mx01` with the resource group created in Part 1, if you chose a different name
+    - Use the **Audit API URL** from the `setup-part2.ps1` script output
 
    **Note:** All resources will be created in the same location as your resource group.
 
 2. At the end of the script output, you will see:
 
-   ```
-   ════════════════════════════════════════════════════════════
+```
+  ════════════════════════════════════════════════════════════
    MCP SERVER URL (copy and paste into Foundry Tools config):
    ════════════════════════════════════════════════════════════
 
    https://aca-agentws-mcp-<initials>-<region>.azurecontainerapps.io
 
    ════════════════════════════════════════════════════════════
-   ```
+```
 
 3. **Copy this URL** — you'll use it when adding the MCP server connection in Foundry.
 
@@ -139,7 +134,7 @@ In Foundry:
 10. Enter the tool connection details:
 
 | Field | Value |
-|-------|-------|
+| --- | --- |
 | **Name** | `audit-api-mcp` |
 | **Server** | Paste your endpoint URL from the `deploy-mcp.ps1` script output |
 | **Authentication** | Unauthenticated |
@@ -155,7 +150,7 @@ In Foundry:
 
 Open the agent in Foundry's chat interface and test the following queries.
 
-> **Note:** When the agent calls an MCP tool for the first time, the playground will prompt you for permission to execute the tool call. Click **Allow** to proceed.
+> **Approval required:** During validation, Foundry will prompt you to approve MCP tool requests. You must approve these requests for the tool calls to run. When prompted, select **Approve all** so you can complete all three validation queries.
 
 **Query 1: Get the scorecard**
 > What audit areas are we being evaluated on, and what's our current status?

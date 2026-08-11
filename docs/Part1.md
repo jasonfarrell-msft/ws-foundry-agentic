@@ -30,14 +30,25 @@ Complete this section exactly in the Azure portal with fixed values:
 4. In the Foundry portal, select **Build** from the top navigation, then select **Models** from the left navigation.
 5. Select **Deploy** button from the far right, choose **Base Model**.
 6. Select model **GPT-5.4-nano** (or another GPT 5.2+ model if GPT-5.4 is unavailable in your region/quota).
+
+    **If you hit a quota error deploying GPT-5.4-nano**, choose one of the following instead. These models are officially supported by Foundry IQ as the knowledge base's Chat completions model. Availability and quota vary by subscription/tenant, so try them in order until one deploys successfully:
+    - `gpt-5.4-mini`
+    - `gpt-5.4`
+    - `gpt-5.2`
+    - `gpt-5.1`
+    - `gpt-5-mini`
+
+    > **Note:** GPT-5.5 is not supported as the Foundry IQ Chat completions model. If you select GPT-5.5, retrieval can fail with a `400 BadRequest` stating that function tools with `reasoning_effort` are not supported for that model in `/v1/chat/completions`.
 7. Click **Deploy** on the right-hand side and click **Custom settings**.
 8. Set the following:
-    - Deployment Name: **`gpt-5.4-nano-deployment`**
+    - Deployment Name: Use a name that matches the model you selected, for example **`gpt-5.4-nano-deployment`**
     - Deployment Type: **Global Standard**
     - Max out Tokens per Minute Rate Limit
 9. Click **Deploy** to deploy the model
 
 Once deployed, you will land on the **Model Playground** within Foundry. You can ask questions and provide instructions to see how the model responds.
+
+> Throughout the rest of this guide, references to `gpt-5.4-nano-deployment` mean "the chat-model deployment you created in this step." Substitute your actual deployment name if you used one of the fallback models above.
 
 ## 3) Prepare your data
 
@@ -150,33 +161,32 @@ This allows Azure AI Search to read and index the workshop documents. Wait a few
     - **Retrieval instructions:** `Use only the connected corpus. Prioritize the most relevant policy/audit documents and sections that directly answer the question, preferring authoritative evidence with clear citation metadata. Do not use external sources.`
     - **Output mode:** `Answer synthesis`
     - **Answer instructions:** `Answer using only retrieved evidence. Be concise, cite sources, state confidence, and identify missing evidence.`
+    - **Chat completions model:** Select the deployed `gpt-5.4-nano-deployment` model. **Do not select a reasoning-effort model such as GPT-5.5 here.** Foundry IQ calls this model over `/v1/chat/completions`, and reasoning-effort models combined with function/tool calling on that endpoint return a `400 BadRequest` (`Function tools with reasoning_effort are not supported for this model in /v1/chat/completions`). If quota forces you off `gpt-5.4-nano-deployment`, choose another non-reasoning GPT-5.x deployment instead.
 7. Select **Add knowledge source**, then choose **Azure Blob Storage**.
     - **Name:** `ks-azureblob-docs`
     - **Storage account:** Select the storage account you created in Section 3.
     - **Container name:** `docs`
     - **Content extraction mode:** `Standard`
-12. Select an existing `text-embedding-3-small` deployment for **Embedding model**. If none exists, deploy the `text-embedding-3-small` model using the available deployment name, then select it.
-13. Confirm **Chat completions model** is set to a compatible chat-model deployment in your project, such as a GPT-5.x deployment. If you already have a compatible deployment with a different name, select it; if none exists, deploy a supported chat model and then select it.
-14. Click **Create**.
-15. After completing the knowledge source wizard, you are returned to the knowledge base configuration page.
-16. Select **Save knowledge base** to save your changes before continuing.
-17. Refresh the knowledge base details page and confirm the **Knowledge source** status changes from **Creating** to **Active** before continuing.
+12. Select an existing `text-embedding-3-small` deployment for **Embedding model**. If none exists, deploy the `text-embedding-3-small` model using the available deployment name, then select it. **Do not set or change the Chat completions model in this step; it was already selected when you configured the knowledge base in Step 6.**
+13. Click **Create**.
+14. After completing the knowledge source wizard, you are returned to the knowledge base configuration page.
+15. Select **Save knowledge base** to save your changes before continuing.
+16. Refresh the knowledge base details page and confirm the **Knowledge source** status changes from **Creating** to **Active** before continuing.
 
 ## 5) Create and configure the policy-audit-info-agent
 
 The data and Foundry IQ knowledge base are ready before you create the agent. Build the agent with the final system prompt below, attach the active knowledge base, and remove the default Web Search tool.
 
 1. In the Foundry portal, open `main-project` and select **Build**.
-2. Open **Knowledge** and confirm that `kb-policy-audit-documents` has **Status: Active**. If it is still processing, wait for ingestion and indexing to finish before continuing.
-3. Select **Agents** from the left navigation.
-4. Select **New agent** and choose **Build an agent**.
-5. Give the agent the name **`policy-audit-info-agent`**.
-6. Click **Create**.
-7. In **Instructions** (or **System instructions**), paste the final system prompt below.
-8. Delete the **`Web Search`** tool if Foundry added it automatically. We want to ensure the agent uses only the connected Foundry IQ corpus and does not go out to the web.
-9. Expand the **Knowledge** section, click **Add**, and select **Connect to Foundry IQ**.
-10. Select the Azure AI Search service and knowledge base you created, then click **Connect**.
-11. **Save the agent. This is required before the Foundry IQ source will be used.** Do not continue until the save completes.
+2. Select **Agents** from the left navigation.
+3. Select **New agent** and choose **Build an agent**.
+4. Give the agent the name **`policy-audit-info-agent`**.
+5. Click **Create**.
+6. In **Instructions** (or **System instructions**), paste the final system prompt below.
+7. Delete the **`Web Search`** tool if Foundry added it automatically. We want to ensure the agent uses only the connected Foundry IQ corpus and does not go out to the web.
+8. Expand the **Knowledge** section, click **Add**, and select **Connect to Foundry IQ**.
+9. Select the Azure AI Search service and knowledge base you created, then click **Connect**.
+10. **Save the agent. This is required before the Foundry IQ source will be used.** Do not continue until the save completes.
 
 Paste this as the final system prompt:
 
@@ -199,9 +209,6 @@ Paste this as the final system prompt:
 > Your top priority is faithful, evidence-based retrieval behavior from the connected Foundry IQ knowledge base only.
 
 ## 6) Verify the agent in the playground
-
-Open the agent playground and test the following questions. They are designed to exercise different agent behaviors — grounded answers, acknowledged limits, and out-of-scope refusals.
-
 ### Questions the agent should answer from the corpus
 
 1. > What audit evidence should be collected to verify SPCC compliance at a compressor station?
@@ -225,21 +232,3 @@ Open the agent playground and test the following questions. They are designed to
 
 6. > What is the current market price of West Texas Intermediate crude oil?
    - *Expected:* The agent refuses to answer, stating this is outside the scope of the policy and audit knowledge base and is not retrievable from the connected corpus.
-
-## 7) Assign Foundry Agent Consumer role for A2A access
-
-> **Warning:** You must have permission to assign Azure roles on the `main-project` Foundry project to complete this section. If you cannot assign roles, ask a subscription or resource owner to perform these steps before Part 3.
-
-This agent's identity will be used in Part 3 for A2A communication. The identity is created when the agent is created and may take a few minutes to become visible. Assign it the **Foundry Agent Consumer** role on `main-project` so it can call other agents through A2A in later parts.
-
-1. Wait 2–3 minutes for the agent identity to propagate.
-2. In the Azure portal, navigate to the Foundry project resource (`main-project`).
-3. In the left navigation, select **Access Control (IAM)**.
-4. Select **+ Add** → **Add role assignment**.
-5. On the **Role** tab, search for and select **Foundry Agent Consumer**.
-6. On the **Members** tab, select **Assign access to** → **Managed identity** → **+ Select members**.
-7. In the subscription dropdown, select your workshop subscription.
-8. In the managed-identity picker, search for `policy-audit-info-agent` and select it.
-9. Select **Select**, then **Review + assign**.
-
-This assignment allows `policy-audit-info-agent` to call other Foundry agents through A2A connections in Part 3.

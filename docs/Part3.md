@@ -20,7 +20,27 @@ This part focuses on prompt-agent orchestration only.
 
 ---
 
-## 1) Confirm both sub-agents are A2A-enabled
+## 1) Assign Foundry Agent Consumer role for A2A access
+
+> **Warning:** You must have permission to assign Azure roles on the `main-project` Foundry project to complete this section. If you cannot assign roles, ask a subscription or resource owner to perform these steps before continuing.
+
+The `policy-audit-info-agent` identity is used in Part 3 for A2A communication. The identity is created when the agent is created and may take a few minutes to become visible. Assign it the **Foundry Agent Consumer** role on `main-project` so it can participate in A2A connections.
+
+1. Wait 2–3 minutes for the agent identity to propagate.
+2. In the Azure portal, navigate to the Foundry project resource (`main-project`).
+3. In the left navigation, select **Access Control (IAM)**.
+4. Select **+ Add** → **Add role assignment**.
+5. On the **Role** tab, search for and select **Foundry Agent Consumer**.
+6. On the **Members** tab, select **Assign access to** → **Managed identity** → **+ Select members**.
+7. In the subscription dropdown, select your workshop subscription.
+8. In the managed-identity picker, search for `policy-audit-info-agent` and select it.
+9. Select **Select**, then **Review + assign**.
+
+This assignment allows `policy-audit-info-agent` to participate in A2A connections in Part 3.
+
+---
+
+## 2) Confirm both sub-agents are A2A-enabled
 
 If you already completed this step earlier, rerun it to ensure configuration is still correct.
 
@@ -36,7 +56,7 @@ If you already completed this step earlier, rerun it to ensure configuration is 
        -AgentDescription  "Provides live compliance scorecard ratings across 7 audit areas and identifies root-cause violations within specific areas. Use for questions about current compliance status, non-compliant areas, or what is driving audit findings."
    ```
 
-   **Note the "Agent A2A base URL" printed in the output.** You'll paste this into the orchestrator's A2A Tool configuration in Step 3. The agent card URL is for verification only; do not paste it into the A2A Tool form.
+   **Note the "Agent A2A base URL" printed in the output.** You'll paste this into the orchestrator's A2A Tool configuration in Section 4. The agent card URL is for verification only; do not paste it into the A2A Tool form.
 
 3. Enable A2A for `policy-audit-info-agent`:
 
@@ -51,7 +71,7 @@ If you already completed this step earlier, rerun it to ensure configuration is 
 
    **Again, note the "Agent A2A base URL" printed in the output.** The agent card URL is for verification only.
 
-4. **Record both Agent A2A base URLs** for use in Step 3. The pattern is:
+4. **Record both Agent A2A base URLs** for use in Section 4. The pattern is:
    ```
    https://{foundry-account}.services.ai.azure.com/api/projects/{project}/agents/{agent}/endpoint/protocols/a2a
    ```
@@ -60,7 +80,7 @@ If you already completed this step earlier, rerun it to ensure configuration is 
 
 ---
 
-## 2) Verify both agent cards before wiring orchestration
+## 3) Verify both agent cards before wiring orchestration
 
 Verify that each sub-agent is discoverable through its agent card:
 
@@ -88,11 +108,11 @@ Check each card for:
 
 > Do not continue until both agent cards resolve successfully.
 
-The portal does not provide a reliable connected/ready indicator for this step. The actual A2A call is validated in the orchestrator playground in Section 4.
+The portal does not provide a reliable connected/ready indicator for this step. The actual A2A call is validated in the orchestrator playground in Section 5.
 
 ---
 
-## 3) Create the Prompt Orchestrator agent in Foundry
+## 4) Create the Prompt Orchestrator agent in Foundry
 
 1. In the Foundry portal, select **New agent** → **Build your agent**.
 2. Create a **Prompt Agent** named `orchestrator-prompt-agent`.
@@ -187,7 +207,7 @@ Before testing, ensure the orchestrator's agent identity has **Foundry Agent Con
 
 ---
 
-## 4) Validate routing behavior in the playground
+## 5) Validate routing behavior in the playground
 
 Use these prompts to confirm routing decisions and synthesis behavior.
 
@@ -258,7 +278,7 @@ Validation:
 
 ---
 
-## 5) Troubleshooting
+## 6) Troubleshooting
 
 If routing is incorrect:
 
