@@ -17,7 +17,7 @@ Run the `scripts/setup-part2.ps1` script to deploy the audit API. The script han
 2. Run the deployment script with your initials and resource group name:
 
 ```powershell
-   .\scripts\setup-part2.ps1 -Initials "jf" -ResourceGroupName "rg-agent-test-mx01"
+   .\scripts\setup-part2.ps1 -Initials "jf" -ResourceGroupName "rg-agent-ws-mx01"
 ```
 
    **Note:** All resources (container registry, container environment, container app) will be created in the same location as the resource group.
@@ -58,14 +58,14 @@ The three audit tools are:
 - **Input:** No parameters required
 
 **Tool 2: get_audit_area_detail**
-- **Description:** Retrieve detailed information about a specific audit area, including its current rating and the root causes of any violations
+- **Description:** Retrieve detailed information about a specific audit area, including its current rating and the root causes of any violations. Use the exact hyphenated `area_id` returned by the scorecard; for example, use `psm-program`, not `psm_program`.
 - **Input:** 
-    - `area_id` (string, required) — The unique identifier for the audit area (e.g., 'spcc_compliance', 'psm_program', 'subpart_w_reporting')
+    - `area_id` (string, required) — The unique hyphenated identifier for the audit area (for example, `spcc-compliance`, `psm-program`, or `subpart-w-ghg`)
 
 **Tool 3: update_audit_area**
-- **Description:** Update an audit area's compliance rating and violation causes (used for tracking remediation progress)
+- **Description:** Update an audit area's compliance rating and violation causes (used for tracking remediation progress). Use the exact hyphenated `area_id` returned by the scorecard; for example, use `psm-program`, not `psm_program`.
 - **Input:**
-    - `area_id` (string, required) — The unique identifier for the audit area
+    - `area_id` (string, required) — The unique hyphenated identifier for the audit area
     - `rating` (string, required) — The new compliance rating (Compliant, At Risk, or Non-compliant)
     - `violation_causes` (array, required) — Updated list of violation causes
 
@@ -76,12 +76,12 @@ Now deploy the MCP server to Azure Container Apps and capture its endpoint URL.
 1. Open PowerShell and run the deployment script:
 
 ```powershell
-   .\scripts\deploy-mcp.ps1 -Initials "jf" -ResourceGroupName "rg-agent-test-mx01" -ApiUrl "<AUDIT_API_URL_FROM_SETUP_SCRIPT>"
+   .\scripts\deploy-mcp.ps1 -Initials "jf" -ResourceGroupName "rg-agent-ws-mx01" -ApiUrl "<AUDIT_API_URL_FROM_SETUP_SCRIPT>"
 ```
 
    Replace:
     - `jf` with your actual initials
-    - `rg-agent-test-mx01` with the resource group created in Part 1, if you chose a different name
+    - `rg-agent-ws-mx01`
     - Use the **Audit API URL** from the `setup-part2.ps1` script output
 
    **Note:** All resources will be created in the same location as your resource group.
@@ -153,19 +153,25 @@ Open the agent in Foundry's chat interface and test the following queries.
 > **Approval required:** During validation, Foundry will prompt you to approve MCP tool requests. You must approve these requests for the tool calls to run. When prompted, select **Approve all** so you can complete all three validation queries.
 
 **Query 1: Get the scorecard**
-> What audit areas are we being evaluated on, and what's our current status?
+```text
+What audit areas are we being evaluated on, and what's our current status?
+```
 
 Expected: Agent calls `get_audit_scorecard`, returns all 7 areas with their ratings (Compliant, At Risk, Non-compliant).
 
 **Query 2: Drill into a specific area**
-> Why is the PSM Program Controls area marked as Non-compliant?
+```text
+Why is the PSM Program Controls area marked as Non-compliant?
+```
 
-Expected: Agent calls `get_audit_area_detail` with `area_id = "psm_program"`, returns the current rating and specific violation causes (e.g., "PHA overdue", "MOC pre-startup safety review missing").
+Expected: Agent calls `get_audit_area_detail` with `area_id = "psm-program"`, returns the current rating and specific violation causes (e.g., "PHA overdue", "MOC pre-startup safety review missing").
 
 **Query 3: Another area**
-> Tell me about the SPCC Compliance audit area.
+```text
+Tell me about the SPCC Compliance audit area.
+```
 
-Expected: Agent calls `get_audit_area_detail` with `area_id = "spcc_compliance"`, returns rating and violation causes.
+Expected: Agent calls `get_audit_area_detail` with `area_id = "spcc-compliance"`, returns rating and violation causes.
 
 ---
 

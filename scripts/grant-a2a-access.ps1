@@ -24,7 +24,7 @@
 .EXAMPLE
     .\scripts\grant-a2a-access.ps1 `
         -FoundryName "my-foundry-account" `
-        -ResourceGroupName "my-resource-group" `
+        -ResourceGroupName "rg-agent-ws-mx01" `
         -ProjectName "main-project" `
         -AgentName "orchestrator-prompt-agent"
 #>

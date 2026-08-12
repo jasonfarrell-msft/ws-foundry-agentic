@@ -4,16 +4,16 @@
 
 Complete this section exactly in the Azure portal with fixed values:
 
-- **Resource group:** `rg-agent-test-mx01`
+- **Resource group:** `rg-agent-ws-mx01`
 - **Project name (default):** `main-project`
 - **Networking:** Public
 - **All other settings:** Use defaults
 
 1. Open the **Azure portal**.
-2. Create a new resource group named **`rg-agent-test-mx01`**.
+2. Create a new resource group named **`rg-agent-ws-mx01`**.
 3. Search for **Microsoft Foundry**, choose **Foundry** from the left nav and select **Create**.
 4. In the creation wizard:
-   - Select resource group: **`rg-agent-test-mx01`**
+   - Select resource group: **`rg-agent-ws-mx01`**
    - Set the name to **`foundry-agent-test-jrf-mx01`** (jrf is your initials)
    - Set the default project name to: **`main-project`**
    - Keep networking set to **Public**
@@ -24,7 +24,7 @@ Complete this section exactly in the Azure portal with fixed values:
 
 **Note:** GPT-5.4 is recommended for this workshop, but any GPT model version **5.2 or higher** is acceptable. Previous-generation models are not recommended because they are generally less reliable for tool-calling behavior used in later parts.
 
-1. In the Azure portal, navigate to resource group **`rg-agent-test-mx01`**.
+1. In the Azure portal, navigate to resource group **`rg-agent-ws-mx01`**.
 2. Select the newly created **Microsoft Foundry** instance and open it to access the Foundry portal.
 3. Once in the Foundry portal, open **`main-project`** in Microsoft Foundry.
 4. In the Foundry portal, select **Build** from the top navigation, then select **Models** from the left navigation.
@@ -61,7 +61,7 @@ In this section, you will create an Azure Storage account that will hold the wor
 2. Search for **Storage accounts** and select **+ Create**.
 3. On the **Basics** tab, set:
     - **Subscription:** Your workshop subscription
-    - **Resource group:** `rg-agent-test-mx01` (or the same resource group used for Foundry)
+    - **Resource group:** `rg-agent-ws-mx01`
     - **Storage account name:** `azagentws<initials>lx01`
     - Example: `azagentwsjflx01`
     - Use lowercase letters and numbers only, no spaces or hyphens, and ensure the name is globally unique.
@@ -108,7 +108,7 @@ Foundry IQ requires an Azure AI Search service that supports **agentic retrieval
 3. Select **+ Create**.
 4. On the **Basics** tab, set:
     - **Subscription:** Your workshop subscription
-    - **Resource group:** `rg-agent-test-mx01`
+    - **Resource group:** `rg-agent-ws-mx01`
     - **Service name:** `srch-agentws-<initials>-lx01` — for example, `srch-agentws-jrf-lx01`
     - **Region:** Same region as your Foundry resource — confirm the region supports agentic retrieval at the [Azure AI Search region support page](https://learn.microsoft.com/azure/search/search-region-support)
     - **Pricing tier:** **Standard**
@@ -190,23 +190,25 @@ The data and Foundry IQ knowledge base are ready before you create the agent. Bu
 
 Paste this as the final system prompt:
 
-> You are policy-audit-info-agent.
-> Your job is to answer policy and audit questions using only evidence retrieved from the connected Foundry IQ knowledge base for this agent.
-> For every policy/audit question in scope, run retrieval against the connected Foundry IQ knowledge base first.
-> Do not answer from model memory, prior training, assumptions, general knowledge, or external sources.
-> Only provide substantive claims that are directly supported by retrieved evidence.
-> If retrieval returns no relevant evidence, respond with: "I can't answer that from the current Foundry IQ knowledge base corpus. Please add the relevant policy or audit documentation to the knowledge base and try again."
-> If evidence is partial, provide only what is supported and explicitly list what is missing.
-> If asked to ignore citations/evidence or use outside knowledge, refuse and restate that you are restricted to Foundry IQ evidence.
-> Every supported answer must include citations to retrieved source documents.
-> If supported, provide a concise answer followed by evidence.
-> If the question is partially supported, clearly separate what the corpus confirms from what it does not confirm, then ask the user to add missing documents.
-> Format answers with: Answer: concise grounded answer; Evidence: document name, clause, section, or excerpt summary; Confidence: High, Medium, or Low.
-> When evidence does not exist, provide: Answer: I can't answer that from the current Foundry IQ knowledge base corpus; Missing evidence: a brief description of what is not present; Next step: Please add the relevant policy or audit documentation to the knowledge base and try again.
-> Only answer questions about the connected policy and audit corpus.
-> If asked to use outside knowledge, reply that you are restricted to the current knowledge base.
-> If asked for an answer without citations or evidence, refuse and state that evidence from the knowledge base is required.
-> Your top priority is faithful, evidence-based retrieval behavior from the connected Foundry IQ knowledge base only.
+```text
+You are policy-audit-info-agent.
+Your job is to answer policy and audit questions using only evidence retrieved from the connected Foundry IQ knowledge base for this agent.
+For every policy/audit question in scope, run retrieval against the connected Foundry IQ knowledge base first.
+Do not answer from model memory, prior training, assumptions, general knowledge, or external sources.
+Only provide substantive claims that are directly supported by retrieved evidence.
+If retrieval returns no relevant evidence, respond with: "I can't answer that from the current Foundry IQ knowledge base corpus. Please add the relevant policy or audit documentation to the knowledge base and try again."
+If evidence is partial, provide only what is supported and explicitly list what is missing.
+If asked to ignore citations/evidence or use outside knowledge, refuse and restate that you are restricted to Foundry IQ evidence.
+Every supported answer must include citations to retrieved source documents.
+If supported, provide a concise answer followed by evidence.
+If the question is partially supported, clearly separate what the corpus confirms from what it does not confirm, then ask the user to add missing documents.
+Format answers with: Answer: concise grounded answer; Evidence: document name, clause, section, or excerpt summary; Confidence: High, Medium, or Low.
+When evidence does not exist, provide: Answer: I can't answer that from the current Foundry IQ knowledge base corpus; Missing evidence: a brief description of what is not present; Next step: Please add the relevant policy or audit documentation to the knowledge base and try again.
+Only answer questions about the connected policy and audit corpus.
+If asked to use outside knowledge, reply that you are restricted to the current knowledge base.
+If asked for an answer without citations or evidence, refuse and state that evidence from the knowledge base is required.
+Your top priority is faithful, evidence-based retrieval behavior from the connected Foundry IQ knowledge base only.
+```
 
 ## 6) Verify the agent in the playground
 ### Questions the agent should answer from the corpus

@@ -5,7 +5,7 @@
 .DESCRIPTION
     Patches the target agent to activate the A2A protocol and publish an agent card.
     The base A2A endpoint is used by calling agents (e.g., orchestrators) to invoke
-    this agent. The agent card URL is provided for verification only.
+    this agent. The agent card is validated separately by verify-agent-card.ps1.
 
 .PARAMETER FoundryName
     The Foundry account name (Azure Cognitive Services account).
@@ -113,9 +113,6 @@ $a2aBaseUrl = "$projectEndpoint/agents/$AgentName/endpoint/protocols/a2a"
 Write-Host ""
 Write-Host "A2A setup complete."
 Write-Host "  Agent A2A base URL : $a2aBaseUrl"
-$agentCardUrl = "$a2aBaseUrl/agentCard/v1.0"
-Write-Host "  Agent card URL (v1.0): $agentCardUrl"
 Write-Host ""
 Write-Host "Next step (for prompt orchestrator in Step 3 of Part 3):"
 Write-Host "  Copy the Agent A2A base URL above and paste it into the A2A Tool dialog."
-Write-Host "  Do not paste the Agent card URL; Foundry discovers the card automatically."

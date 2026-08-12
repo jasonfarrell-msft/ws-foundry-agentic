@@ -18,7 +18,7 @@ Azure resource group name where resources were deployed in Part 2
 The Audit API URL (from setup-part2.ps1 output). If not provided, uses AUDIT_API_URL env var.
 
 .EXAMPLE
-pwsh scripts/deploy-mcp.ps1 -Initials "jf" -ResourceGroupName "rg-workshop" -ApiUrl "https://aca-agentws-api-jf-eastus.azurecontainerapps.io"
+pwsh scripts/deploy-mcp.ps1 -Initials "jf" -ResourceGroupName "rg-agent-ws-mx01" -ApiUrl "https://aca-agentws-api-jf-eastus.azurecontainerapps.io"
 #>
 
 param(
@@ -95,6 +95,7 @@ $registryUsername = az acr credential show --resource-group $ResourceGroupName -
 $registryPassword = az acr credential show --resource-group $ResourceGroupName --name $registryName --query "passwords[0].value" -o tsv
 
 # Create or update container app
+$revisionSuffix = "mcp-" + (Get-Date -Format "yyyyMMddHHmmss")
 az containerapp create `
     --name $containerAppName `
     --resource-group $ResourceGroupName `
@@ -106,6 +107,8 @@ az containerapp create `
     --env-vars "AUDIT_API_URL=$ApiUrl" "PORT=8001" `
     --target-port 8001 `
     --ingress 'external' `
+    --min-replicas 1 `
+    --max-replicas 10 `
     --cpu 0.5 `
     --memory 1Gi `
     --query "properties.configuration.ingress.fqdn" -o tsv 2>/dev/null
@@ -120,6 +123,9 @@ if ($?) {
         --resource-group $ResourceGroupName `
         --image "$registryUrl/audit-mcp-server:v1" `
         --set-env-vars "AUDIT_API_URL=$ApiUrl" "PORT=8001" `
+        --revision-suffix $revisionSuffix `
+        --min-replicas 1 `
+        --max-replicas 10 `
         > $null
     
     if (-not $?) {

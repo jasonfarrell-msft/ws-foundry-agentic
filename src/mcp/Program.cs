@@ -48,7 +48,7 @@ internal sealed class AuditTools
     }
 
     [McpServerTool(Name = "get_audit_area_detail"), Description("Retrieve detailed information about a specific audit area, including its current rating and the root causes of any violations")]
-    public async Task<string> GetAuditAreaDetail([Description("The unique identifier for the audit area (e.g., 'spcc_compliance', 'psm_program', 'subpart_w_reporting')")] string area_id)
+    public async Task<string> GetAuditAreaDetail([Description("The unique identifier for the audit area (e.g., 'spcc-compliance', 'psm-program', 'subpart-w-ghg')")] string area_id)
     {
         using var client = _httpClientFactory.CreateClient();
         using var response = await client.GetAsync($"{_options.BaseUrl}/audit/{area_id}");

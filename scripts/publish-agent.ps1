@@ -5,8 +5,7 @@ param(
     [string]$FoundryName,
     [string]$ResourceGroupName,
     [string]$ProjectName,
-    [string]$ProjectEndpoint,
-    [string]$McpServerUrl
+    [string]$ProjectEndpoint
 )
 
 $ErrorActionPreference = "Stop"
@@ -26,10 +25,28 @@ if (-not (Test-Path $ConfigPath)) {
 
 $json = Get-Content $ConfigPath -Raw
 if ($json -match '__FILL_ME__') {
-    Write-Host "Error: Fill in name, description, modelDeploymentName, and instructions before publishing." -ForegroundColor Red
+    Write-Host "Error: Fill in name, description, modelDeploymentName, mcpServerUrl, and instructions before publishing." -ForegroundColor Red
     exit 1
 }
 $config = $json | ConvertFrom-Json
+
+if ([string]::IsNullOrWhiteSpace($config.mcpServerUrl)) {
+    Write-Host "Error: Fill in mcpServerUrl in $ConfigPath before publishing." -ForegroundColor Red
+    exit 1
+}
+
+$mcpServerUri = $null
+if (
+    -not [System.Uri]::TryCreate(
+        [string]$config.mcpServerUrl,
+        [System.UriKind]::Absolute,
+        [ref]$mcpServerUri
+    ) -or
+    $mcpServerUri.Scheme -notin @("http", "https")
+) {
+    Write-Host "Error: mcpServerUrl must be an absolute HTTP or HTTPS URL." -ForegroundColor Red
+    exit 1
+}
 
 $az = Get-Command az -ErrorAction SilentlyContinue
 
@@ -198,11 +215,6 @@ if (-not $ProjectEndpoint) {
     $ProjectEndpoint = "{0}/api/projects/{1}" -f $accountEndpoint.TrimEnd('/'), $ProjectName
 }
 
-if ([string]::IsNullOrWhiteSpace($McpServerUrl)) {
-    Write-Host "Error: Provide -McpServerUrl using the endpoint printed by scripts/deploy-mcp.ps1." -ForegroundColor Red
-    exit 1
-}
-
 $projectScope = $null
 if ($az -and $FoundryName -and $ResourceGroupName -and $ProjectName) {
     $subscriptionId = & $az.Source account show --query id --output tsv --only-show-errors 2>&1
@@ -212,54 +224,52 @@ if ($az -and $FoundryName -and $ResourceGroupName -and $ProjectName) {
 }
 
 $configuredA2aConnections = if ($null -ne $config.a2aConnectionNames) { @($config.a2aConnectionNames) } else { @() }
-if ($configuredA2aConnections.Count -gt 0) {
-    if ($projectScope) {
-        Write-Host "Checking hosted agent RBAC for A2A connections..." -ForegroundColor Yellow
-        $rbacCheck = Test-A2ARuntimeRbac `
-            -AgentName $config.name `
-            -ProjectEndpoint $ProjectEndpoint `
-            -ProjectScope $projectScope `
-            -AzCommand $az
+if ($projectScope) {
+    Write-Host "Checking hosted agent runtime RBAC..." -ForegroundColor Yellow
+    $rbacCheck = Test-A2ARuntimeRbac `
+        -AgentName $config.name `
+        -ProjectEndpoint $ProjectEndpoint `
+        -ProjectScope $projectScope `
+        -AzCommand $az
 
-        switch ($rbacCheck.Status) {
-            "present" {
-                Write-Host "  [OK] Hosted agent identity already has 'Foundry User' at the project scope." -ForegroundColor Green
-            }
-            "missing" {
-                Write-Host "Error: Hosted agent identity is missing 'Foundry User' at the Foundry project scope." -ForegroundColor Red
-                Write-Host "Publishing now would produce a hosted agent that starts but cannot load its RemoteA2A connections." -ForegroundColor Red
-                Write-RbacGuidance `
-                    -AgentName $config.name `
-                    -PrincipalId $rbacCheck.PrincipalId `
-                    -ProjectScope $projectScope `
-                    -ProjectEndpoint $ProjectEndpoint
-                exit 1
-            }
-            "agentMissing" {
-                Write-Host "No existing hosted agent named '$($config.name)' was found. The first publish will create its runtime identity." -ForegroundColor Yellow
-                Write-Host "After the first publish completes, rerun this script so it can verify the A2A RBAC prerequisite." -ForegroundColor Yellow
-                Write-RbacGuidance `
-                    -AgentName $config.name `
-                    -PrincipalId $null `
-                    -ProjectScope $projectScope `
-                    -ProjectEndpoint $ProjectEndpoint
-            }
-            default {
-                Write-Host "Warning: Unable to verify hosted agent RBAC before publish." -ForegroundColor Yellow
-                Write-Host "  $($rbacCheck.Reason)" -ForegroundColor Yellow
-                Write-Host "Treat this as a platform prerequisite if you do not have RBAC visibility." -ForegroundColor Yellow
-                Write-RbacGuidance `
-                    -AgentName $config.name `
-                    -PrincipalId $rbacCheck.PrincipalId `
-                    -ProjectScope $projectScope `
-                    -ProjectEndpoint $ProjectEndpoint
-            }
+    switch ($rbacCheck.Status) {
+        "present" {
+            Write-Host "  [OK] Hosted agent identity already has 'Foundry User' at the project scope." -ForegroundColor Green
+        }
+        "missing" {
+            Write-Host "Error: Hosted agent identity is missing 'Foundry User' at the Foundry project scope." -ForegroundColor Red
+            Write-Host "Publishing now would produce a hosted agent that cannot initialize its runtime." -ForegroundColor Red
+            Write-RbacGuidance `
+                -AgentName $config.name `
+                -PrincipalId $rbacCheck.PrincipalId `
+                -ProjectScope $projectScope `
+                -ProjectEndpoint $ProjectEndpoint
+            exit 1
+        }
+        "agentMissing" {
+            Write-Host "No existing hosted agent named '$($config.name)' was found. The first publish will create its runtime identity." -ForegroundColor Yellow
+            Write-Host "After the first publish completes, rerun this script so it can verify the hosted agent runtime prerequisite." -ForegroundColor Yellow
+            Write-RbacGuidance `
+                -AgentName $config.name `
+                -PrincipalId $null `
+                -ProjectScope $projectScope `
+                -ProjectEndpoint $ProjectEndpoint
+        }
+        default {
+            Write-Host "Warning: Unable to verify hosted agent runtime RBAC before publish." -ForegroundColor Yellow
+            Write-Host "  $($rbacCheck.Reason)" -ForegroundColor Yellow
+            Write-Host "Treat this as a platform prerequisite if you do not have RBAC visibility." -ForegroundColor Yellow
+            Write-RbacGuidance `
+                -AgentName $config.name `
+                -PrincipalId $rbacCheck.PrincipalId `
+                -ProjectScope $projectScope `
+                -ProjectEndpoint $ProjectEndpoint
         }
     }
-    else {
-        Write-Host "Warning: Skipping hosted agent RBAC preflight because the Foundry project scope could not be determined." -ForegroundColor Yellow
-        Write-Host "Provide -FoundryName, -ResourceGroupName, and -ProjectName so the script can check the A2A RBAC prerequisite." -ForegroundColor Yellow
-    }
+}
+else {
+    Write-Host "Warning: Skipping hosted agent runtime RBAC preflight because the Foundry project scope could not be determined." -ForegroundColor Yellow
+    Write-Host "Provide -FoundryName, -ResourceGroupName, and -ProjectName so the script can check the hosted agent prerequisite." -ForegroundColor Yellow
 }
 
 $tempPublishRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("remediation-agent-publish-" + [System.Guid]::NewGuid().ToString("N"))
@@ -286,9 +296,6 @@ try {
     $publishedConfigPath = Join-Path $tempPublishRoot "remediation-agent.json"
     $publishedConfig = Get-Content $publishedConfigPath -Raw | ConvertFrom-Json
     $publishedConfig | Add-Member -NotePropertyName "projectEndpoint" -NotePropertyValue $ProjectEndpoint -Force
-    if (-not [string]::IsNullOrWhiteSpace($McpServerUrl)) {
-        $publishedConfig | Add-Member -NotePropertyName "mcpServerUrl" -NotePropertyValue $McpServerUrl.TrimEnd('/') -Force
-    }
 
     # Resolve A2A connection ARM IDs at publish time so the runtime can use them
     # directly without calling GetConnection (which requires elevated permissions).
@@ -308,9 +315,6 @@ try {
 
     $publishedConfig | ConvertTo-Json -Depth 20 | Set-Content -Path $publishedConfigPath -Encoding UTF8
     Write-Host "Injected project endpoint into published remediation-agent.json." -ForegroundColor DarkGray
-    if (-not [string]::IsNullOrWhiteSpace($McpServerUrl)) {
-        Write-Host "Injected audit MCP server URL into published remediation-agent.json." -ForegroundColor DarkGray
-    }
 
     Write-Host "Publishing hosted agent to Foundry..." -ForegroundColor Yellow
     dotnet run `

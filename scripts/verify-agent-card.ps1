@@ -22,7 +22,7 @@
 .EXAMPLE
     .\scripts\verify-agent-card.ps1 `
         -FoundryName       "my-foundry-account" `
-        -ResourceGroupName "my-resource-group" `
+        -ResourceGroupName "rg-agent-ws-mx01" `
         -ProjectName       "my-project" `
         -AgentName         "audit-status-agent"
 #>

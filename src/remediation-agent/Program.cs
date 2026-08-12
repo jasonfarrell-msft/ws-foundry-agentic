@@ -72,6 +72,44 @@ var allowedAuditAreas = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     "incident-corrective"
 };
 
+// The orchestrator sometimes sends the human-readable audit area name instead of
+// the canonical ID, so accept either form and normalize to the canonical ID.
+var auditAreaAliases = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+{
+    ["SPCC Compliance"] = "spcc-compliance",
+    ["PSM Program Controls"] = "psm-program",
+    ["Subpart-W GHG Reporting"] = "subpart-w-ghg",
+    ["RCRA Hazardous Waste"] = "rcra-waste",
+    ["Pipeline Safety (49-CFR-192/195)"] = "pipeline-safety",
+    ["Pipeline Safety"] = "pipeline-safety",
+    ["Environmental Controls (CWA/CAA)"] = "environmental-controls",
+    ["Environmental Controls"] = "environmental-controls",
+    ["Incident & Corrective Actions"] = "incident-corrective"
+};
+
+string NormalizeAuditAreaId(string value)
+{
+    var trimmed = (value ?? string.Empty).Trim();
+    if (allowedAuditAreas.Contains(trimmed))
+    {
+        return trimmed;
+    }
+
+    if (auditAreaAliases.TryGetValue(trimmed, out var canonical))
+    {
+        return canonical;
+    }
+
+    var collapsed = trimmed.Replace('_', '-');
+    if (allowedAuditAreas.Contains(collapsed))
+    {
+        return collapsed;
+    }
+
+    throw new InvalidOperationException(
+        $"Audit area '{trimmed}' is not allowlisted. Use a canonical audit area ID such as psm-program.");
+}
+
 if (!string.IsNullOrWhiteSpace(mcpServerUrl))
 {
     if (!Uri.TryCreate(mcpServerUrl, UriKind.Absolute, out var mcpEndpoint)
@@ -108,7 +146,7 @@ if (!string.IsNullOrWhiteSpace(mcpServerUrl))
 
     var capturedMcpClient = mcpClient;
     var remediationTool = AIFunctionFactory.Create(
-        async ([System.ComponentModel.Description("Approved audit area ID, for example psm-program.")] string area_id,
+        async ([System.ComponentModel.Description("Canonical audit area ID such as psm-program, spcc-compliance, or incident-corrective. Always use the hyphenated ID, never the display name.")] string area_id,
                [System.ComponentModel.Description("Target simulated rating. Use Compliant only for this workshop remediation.")] string rating,
                [System.ComponentModel.Description("The updated list of remaining violation causes.")] string[] violation_causes,
                [System.ComponentModel.Description("The plan ID returned by the orchestrator.")] string plan_id,
@@ -124,8 +162,7 @@ if (!string.IsNullOrWhiteSpace(mcpServerUrl))
                 throw new InvalidOperationException("Remediation requires policy and audit context.");
             if (!string.Equals(rating.Trim(), "Compliant", StringComparison.OrdinalIgnoreCase))
                 throw new InvalidOperationException("This workshop tool only supports the target rating Compliant.");
-            if (!allowedAuditAreas.Contains(area_id))
-                throw new InvalidOperationException($"Audit area '{area_id}' is not allowlisted.");
+            var canonicalAreaId = NormalizeAuditAreaId(area_id);
             if (violation_causes.Length != 0)
                 throw new InvalidOperationException("A Compliant audit area must have an empty violation_causes list.");
 
@@ -133,19 +170,21 @@ if (!string.IsNullOrWhiteSpace(mcpServerUrl))
                 "update_audit_area",
                 new Dictionary<string, object?>
                 {
-                    ["area_id"] = area_id,
+                    ["area_id"] = canonicalAreaId,
                     ["rating"] = "Compliant",
                     ["violation_causes"] = violation_causes
                 },
                 cancellationToken: ct);
 
-            if (result.IsError == true)
-                throw new InvalidOperationException($"MCP remediation failed for plan '{plan_id}'.");
-
             var responseText = string.Join(
                 "\n",
                 result.Content.OfType<TextContentBlock>().Select(content => content.Text));
-            return $"Plan {plan_id} applied to {area_id}. MCP result: {responseText}";
+
+            if (result.IsError == true)
+                throw new InvalidOperationException(
+                    $"MCP remediation failed for plan '{plan_id}' on area '{canonicalAreaId}': {responseText}");
+
+            return $"Plan {plan_id} applied to {canonicalAreaId}. MCP result: {responseText}";
         },
         name: "apply_approved_remediation",
         description: "Apply one explicitly approved, bounded remediation to the simulated audit service.");
@@ -154,7 +193,7 @@ if (!string.IsNullOrWhiteSpace(mcpServerUrl))
 else
 {
     throw new InvalidOperationException(
-        "No audit MCP server URL configured. Pass -McpServerUrl when publishing the remediation agent.");
+        "No audit MCP server URL configured. Set mcpServerUrl in remediation-agent.json before publishing the remediation agent.");
 }
 
 if (!string.IsNullOrWhiteSpace(projectEndpointStr))
