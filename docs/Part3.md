@@ -20,27 +20,7 @@ This part focuses on prompt-agent orchestration only.
 
 ---
 
-## 1) Assign Foundry Agent Consumer role for A2A access
-
-> **Warning:** You must have permission to assign Azure roles on the `main-project` Foundry project to complete this section. If you cannot assign roles, ask a subscription or resource owner to perform these steps before continuing.
-
-The `policy-audit-info-agent` identity is used in Part 3 for A2A communication. The identity is created when the agent is created and may take a few minutes to become visible. Assign it the **Foundry Agent Consumer** role on `main-project` so it can participate in A2A connections.
-
-1. Wait 2–3 minutes for the agent identity to propagate.
-2. In the Azure portal, navigate to the Foundry project resource (`main-project`).
-3. In the left navigation, select **Access Control (IAM)**.
-4. Select **+ Add** → **Add role assignment**.
-5. On the **Role** tab, search for and select **Foundry Agent Consumer**.
-6. On the **Members** tab, select **Assign access to** → **Managed identity** → **+ Select members**.
-7. In the subscription dropdown, select your workshop subscription.
-8. In the managed-identity picker, search for `policy-audit-info-agent` and select it.
-9. Select **Select**, then **Review + assign**.
-
-This assignment allows `policy-audit-info-agent` to participate in A2A connections in Part 3.
-
----
-
-## 2) Confirm both sub-agents are A2A-enabled
+## 1) Confirm both sub-agents are A2A-enabled
 
 If you already completed this step earlier, rerun it to ensure configuration is still correct.
 
@@ -56,7 +36,7 @@ If you already completed this step earlier, rerun it to ensure configuration is 
        -AgentDescription  "Provides live compliance scorecard ratings across 7 audit areas and identifies root-cause violations within specific areas. Use for questions about current compliance status, non-compliant areas, or what is driving audit findings."
    ```
 
-   **Note the "Agent A2A base URL" printed in the output.** You'll paste this into the orchestrator's A2A Tool configuration in Section 4. The agent card URL is for verification only; do not paste it into the A2A Tool form.
+   **Note the "Agent A2A base URL" printed in the output.** You'll paste this into the orchestrator's A2A Tool configuration in Section 3. The agent card URL is for verification only; do not paste it into the A2A Tool form.
 
 3. Enable A2A for `policy-audit-info-agent`:
 
@@ -71,7 +51,7 @@ If you already completed this step earlier, rerun it to ensure configuration is 
 
    **Again, note the "Agent A2A base URL" printed in the output.** The agent card URL is for verification only.
 
-4. **Record both Agent A2A base URLs** for use in Section 4. The pattern is:
+4. **Record both Agent A2A base URLs** for use in Section 3. The pattern is:
    ```
    https://{foundry-account}.services.ai.azure.com/api/projects/{project}/agents/{agent}/endpoint/protocols/a2a
    ```
@@ -80,7 +60,7 @@ If you already completed this step earlier, rerun it to ensure configuration is 
 
 ---
 
-## 3) Verify both agent cards before wiring orchestration
+## 2) Verify both agent cards before wiring orchestration
 
 Verify that each sub-agent is discoverable through its agent card:
 
@@ -108,22 +88,24 @@ Check each card for:
 
 > Do not continue until both agent cards resolve successfully.
 
-The portal does not provide a reliable connected/ready indicator for this step. The actual A2A call is validated in the orchestrator playground in Section 5.
+The portal does not provide a reliable connected/ready indicator for this step. The actual A2A call is validated in the orchestrator playground in Section 4.
 
 ---
 
-## 4) Create the Prompt Orchestrator agent in Foundry
+## 3) Create the Prompt Orchestrator agent in Foundry
 
 1. In the Foundry portal, select **New agent** → **Build your agent**.
 2. Create a **Prompt Agent** named `orchestrator-prompt-agent`.
 3. Use your model deployment from Part 1.
-4. Set the system instructions similar to:
+4. Set the system instructions to:
+
+   > **Important:** The Agent Connection names are essential routing identifiers. Use the exact names `audit-status-agent-a2a` and `policy-audit-info-agent-a2a` when you register the connections, and keep those names unchanged.
 
 > You are an orchestration prompt agent for oil and gas policy and audit workflows.
 >
 > You have access to two specialized agents:
-> - audit-status-agent: live compliance scorecard ratings and root-cause violations.
-> - policy-audit-info-agent: policy/regulatory requirements and required audit evidence, grounded in its knowledge base with citations.
+> - `audit-status-agent-a2a`: live compliance scorecard ratings and root-cause violations.
+> - `policy-audit-info-agent-a2a`: policy/regulatory requirements and required audit evidence, grounded in its knowledge base with citations.
 >
 > Routing rules:
 > Before selecting a tool, apply this scope gate:
@@ -133,35 +115,27 @@ The portal does not provide a reliable connected/ready indicator for this step. 
 > 4. For an out-of-scope request, do not call any tool or A2A agent. Reply exactly: I only handle oil-and-gas policy, compliance, and audit questions.
 >
 > After the scope gate passes:
-> 5. Questions about live status, scores, findings, or remediation status -> audit-status-agent.
-> 6. Questions about policy, regulations, controls, or required evidence -> policy-audit-info-agent.
-> 7. Questions requiring both operational status and regulatory interpretation -> call both and synthesize.
-> 8. When using policy content, preserve citations.
+> 5. For any in-scope question containing current, live, score, rating, finding, non-compliant, or remediation-status language, you must call the `audit-status-agent-a2a` tool. This is mandatory — never answer from memory, from the policy corpus, or from Foundry IQ, and never skip the call based on your own prediction of whether it will succeed.
+> 6. Only after you have actually attempted the `audit-status-agent-a2a` call: if it returned a usable result, use that result as the authoritative source for current status. If it failed or returned no result, report that live status could not be retrieved — do not substitute corpus content in either case.
+> 7. Questions about policy, regulations, controls, or required evidence -> call `policy-audit-info-agent-a2a`.
+> 8. Questions requiring both operational status and regulatory interpretation -> call `audit-status-agent-a2a` first, then `policy-audit-info-agent-a2a`, and clearly separate current status from policy interpretation.
+> 9. When using policy content, preserve citations.
 
-### Grant the orchestrator identity A2A access
+### Required: grant the orchestrator identity A2A access
 
-The A2A tool authenticates with the orchestrator's **Agent Identity**. That identity must have the **Foundry Agent Consumer** role on the target project before the tool can fetch an agent card or call a sub-agent.
+Incoming A2A requires the calling identity to have the **Foundry Agent Consumer** role (or higher) on the Foundry project that hosts the target agent — even when every agent lives in the same project. This is a token-authorization requirement for A2A calls, not a cross-project-only rule. Without this role assignment, A2A calls fail (often surfacing as a generic server error rather than a clear 401/403).
 
-After creating `orchestrator-prompt-agent`, retrieve its instance identity. Run this from PowerShell after replacing the placeholders:
+**Foundry Agent Consumer may not appear in the Azure portal's role-assignment picker yet**, even though the role definition exists in the tenant. Use the script below, which assigns the role directly through the Azure CLI:
 
 ```powershell
-$agent = az rest `
-    --method get `
-    --url "https://YOUR_FOUNDRY_ACCOUNT_NAME.services.ai.azure.com/api/projects/YOUR_PROJECT_NAME/agents/orchestrator-prompt-agent?api-version=v1" `
-    --resource https://ai.azure.com |
-    ConvertFrom-Json
-
-$principalId = $agent.instance_identity.principal_id
-$subscriptionId = az account show --query id -o tsv
-$projectScope = "/subscriptions/$subscriptionId/resourceGroups/YOUR_RESOURCE_GROUP/providers/Microsoft.CognitiveServices/accounts/YOUR_FOUNDRY_ACCOUNT_NAME/projects/YOUR_PROJECT_NAME"
-
-az role assignment create `
-    --role "Foundry Agent Consumer" `
-    --assignee $principalId `
-    --scope $projectScope
+.\scripts\grant-a2a-access.ps1 `
+    -FoundryName "YOUR_FOUNDRY_ACCOUNT_NAME" `
+    -ResourceGroupName "YOUR_RESOURCE_GROUP" `
+    -ProjectName "YOUR_PROJECT_NAME" `
+    -AgentName "orchestrator-prompt-agent"
 ```
 
-If `instance_identity.principal_id` is not available yet, publish or activate the agent version, then retrieve the agent details again. Role assignment changes can take several minutes to propagate.
+If the script reports that the identity is not available, publish or activate the agent version and run the script again. Role assignment changes can take several minutes to propagate.
 
 ### Attach A2A Tools and Connections
 
@@ -177,37 +151,36 @@ Web Search is enabled by default on new prompt agents but is not needed for this
 3. Confirm removal when prompted
 4. Verify that Web Search no longer appears in the Tools list
 
-#### Step 3: Add A2A Project Connections
-The A2A tool accepts the target agent's **base A2A endpoint**. Do not append the agent-card path to the endpoint URL. If the dialog exposes a card-path field, enter `agentCard/v1.0` there.
+#### Step 3: Add Agent Connections
+The A2A tool accepts the target agent's **base A2A endpoint**. Do not append an agent-card path to the endpoint URL. Foundry resolves the audience and agent card automatically.
 
 1. Click the **Add** button to open the tools picker/menu
 2. Select **Add Tools**
 3. Navigate to the **Custom** tab
 4. Select **A2A**
 5. A form appears. Fill in the following:
+   - **Name:** `audit-status-agent-a2a`
    - **A2A Agent Endpoint:** Paste the first **base A2A URL** (saved from Step 1):
      > https://{foundry-account}.services.ai.azure.com/api/projects/{project}/agents/audit-status-agent/endpoint/protocols/a2a
-   - **Auth type:** Select **Agent Identity**
-   - **Audience:** `https://ai.azure.com`
-   - **Agent card path:** `agentCard/v1.0`
+   - **Auth type:** Select **Microsoft Entra Agent Identity**
 6. Click **Add** or **Confirm**
 7. Repeat steps 1–4, then fill in:
+   - **Name:** `policy-audit-info-agent-a2a`
    - **A2A Agent Endpoint:** Paste the second **base A2A URL**:
      > https://{foundry-account}.services.ai.azure.com/api/projects/{project}/agents/policy-audit-info-agent/endpoint/protocols/a2a
-   - **Auth type:** Select **Agent Identity**
-   - **Audience:** `https://ai.azure.com`
-   - **Agent card path:** `agentCard/v1.0`
+   - **Auth type:** Select **Microsoft Entra Agent Identity**
 8. Click **Add** or **Confirm**
+9. Click **Save**.
 
-**Note:** Replace `{foundry-account}` and `{project}` with your actual Foundry account name and project name. Use the canonical `services.ai.azure.com` host. Paste the base endpoint in the endpoint field and enter `agentCard/v1.0` in the card-path field; do not append the card path to the endpoint or use `/.well-known/agent-card.json`. **Agent Identity** uses the orchestrator agent's managed identity to authenticate to the sub-agent endpoints. Use `https://ai.azure.com` as the audience.
+**Note:** Replace `{foundry-account}` and `{project}` with your actual Foundry account name and project name. Use the canonical `services.ai.azure.com` host and paste the base endpoint in the endpoint field. **Microsoft Entra Agent Identity** authenticates the orchestrator to the specialist endpoints.
 
-Before testing, ensure the orchestrator's agent identity has **Foundry Agent Consumer** on `main-project`. The identity is created when the orchestrator is created and may be visible only after publishing. If you receive a 401 while fetching an agent card, treat it as an Entra/RBAC or endpoint-configuration issue, not a routing issue.
+Before testing, confirm that both specialist agents and the orchestrator are in the same Foundry project, and that the role assignment above completed successfully. If you receive a server error or a 401 while calling an A2A agent, re-run the grant script and confirm the role assignment exists before checking anything else.
 
 > **Scope boundary:** In this part, the orchestrator is a prompt agent. Do not publish a hosted orchestrator in Part 3. Prompt agents are designed for development and testing in the Foundry portal—hosted orchestrators require additional configuration and are outside the scope of this workshop.
 
 ---
 
-## 5) Validate routing behavior in the playground
+## 4) Validate routing behavior in the playground
 
 Use these prompts to confirm routing decisions and synthesis behavior.
 
@@ -218,7 +191,7 @@ Response text alone is not sufficient to verify routing.
 
 **Expected primary routing:** `audit-status-agent` (verify in trace)
 
-> What are our current compliance scores across all audit areas? Which areas are non-compliant?
+> What is our current audit scorecard?
 
 Validation:
 
@@ -275,22 +248,6 @@ Validation:
 
 - Root causes come from status context
 - Audit evidence comes from policy context with citations
-
----
-
-## 6) Troubleshooting
-
-If routing is incorrect:
-
-1. Re-verify both agent cards with `verify-agent-card.ps1`.
-2. Confirm each A2A tool uses the base endpoint ending in `/endpoint/protocols/a2a`.
-3. Confirm the host is `services.ai.azure.com`, authentication is **Agent Identity**, and audience is `https://ai.azure.com`.
-4. Confirm the orchestrator identity has **Foundry Agent Consumer** on the target project.
-5. Tighten sub-agent descriptions to be routing-intent-aware.
-6. Simplify orchestrator instructions so each routing rule maps to one clear intent.
-7. Re-test with the same five prompts and inspect traces/tool invocations.
-
-If you hit hosted-runtime identity or container issues, you are in Part 4 scope; stop this part here.
 
 ---
 

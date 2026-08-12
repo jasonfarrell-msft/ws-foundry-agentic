@@ -17,7 +17,7 @@ Run the `scripts/setup-part2.ps1` script to deploy the audit API. The script han
 2. Run the deployment script with your initials and resource group name:
 
 ```powershell
-   pwsh scripts/setup-part2.ps1 -Initials "jf" -ResourceGroupName "rg-agent-test-mx01"
+   .\scripts\setup-part2.ps1 -Initials "jf" -ResourceGroupName "rg-agent-test-mx01"
 ```
 
    **Note:** All resources (container registry, container environment, container app) will be created in the same location as the resource group.
@@ -76,7 +76,7 @@ Now deploy the MCP server to Azure Container Apps and capture its endpoint URL.
 1. Open PowerShell and run the deployment script:
 
 ```powershell
-   pwsh scripts/deploy-mcp.ps1 -Initials "jf" -ResourceGroupName "rg-agent-test-mx01" -ApiUrl "<AUDIT_API_URL_FROM_SETUP_SCRIPT>"
+   .\scripts\deploy-mcp.ps1 -Initials "jf" -ResourceGroupName "rg-agent-test-mx01" -ApiUrl "<AUDIT_API_URL_FROM_SETUP_SCRIPT>"
 ```
 
    Replace:

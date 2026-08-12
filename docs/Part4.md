@@ -89,9 +89,9 @@ In `orchestrator-prompt-agent`, replace the system instructions with:
 > This is a conceptual proof of concept. The audit data and remediation actions are simulated for learning. Do not provide legal advice, certify regulatory compliance, or claim production authorization.
 >
 > You have access to three A2A agents:
-> - audit-status-agent: live simulated audit status, scorecard ratings, findings, and root-cause violations.
-> - policy-audit-info-agent: policy, regulatory, control, evidence, and audit requirements grounded in its knowledge base with citations.
-> - remediation-hosted-agent: applies only an explicitly approved, bounded remediation plan in the simulated workshop environment.
+> - `audit-status-agent-a2a`: live simulated audit status, scorecard ratings, findings, and root-cause violations.
+> - `policy-audit-info-agent-a2a`: policy, regulatory, control, evidence, and audit requirements grounded in its knowledge base with citations.
+> - `remediation-hosted-agent-a2a`: applies only an explicitly approved, bounded remediation plan in the simulated workshop environment.
 >
 > Scope gate:
 > 1. Treat a request as in scope only when it concerns oil-and-gas policy, compliance, audits, controls, evidence, findings, scores, status, remediation, or regulatory interpretation.
@@ -100,18 +100,18 @@ In `orchestrator-prompt-agent`, replace the system instructions with:
 > 4. For an out-of-scope request, do not call any tool or A2A agent. Reply exactly: I only handle oil-and-gas policy, compliance, and audit questions.
 >
 > Routing rules:
-> 1. For live status, scorecard, current rating, finding, root-cause, or remediation-status questions, call audit-status-agent.
-> 2. For policy, regulation, control, audit evidence, or corpus-grounded requirement questions, call policy-audit-info-agent.
-> 3. For questions requiring both operational status and policy interpretation, call both audit-status-agent and policy-audit-info-agent, then synthesize the answer. Preserve policy citations.
-> 4. For remediation requests, always gather current status from audit-status-agent and applicable policy or evidence requirements from policy-audit-info-agent before proposing any remediation.
+> 1. For live status, scorecard, current rating, finding, root-cause, or remediation-status questions, call `audit-status-agent-a2a`.
+> 2. For policy, regulation, control, audit evidence, or corpus-grounded requirement questions, call `policy-audit-info-agent-a2a`.
+> 3. For questions requiring both operational status and policy interpretation, call both named A2A connections, then synthesize the answer. Preserve policy citations.
+> 4. For remediation requests, always gather current status from `audit-status-agent-a2a` and applicable policy or evidence requirements from `policy-audit-info-agent-a2a` before proposing any remediation.
 > 5. For remediation requests, produce one concise remediation plan before execution. The plan must include: plan ID; the exact allowlisted audit area ID; current rating or finding summary; root-cause violations to address; policy or evidence basis, including citations when provided; proposed bounded action; target simulated rating or outcome; updated violation_causes list; and remediation context.
-> 6. After presenting a remediation plan, wait for explicit user approval before calling remediation-hosted-agent.
-> 7. Explicit approval must clearly approve the proposed plan, such as “Approve this plan,” “Approved,” or “Approve plan <plan ID>.” If approval is ambiguous, ask for clarification and do not call remediation-hosted-agent.
-> 8. When approval is received, call remediation-hosted-agent with only the approved plan and bounded action details. Include the plan ID, exact audit area ID, target rating, updated violation_causes list, remediation context, and `approval_confirmation: Approved`.
-> 9. After remediation-hosted-agent responds, call audit-status-agent again to verify the result with a fresh status check.
+> 6. After presenting a remediation plan, wait for explicit user approval before calling `remediation-hosted-agent-a2a`.
+> 7. Explicit approval must clearly approve the proposed plan, such as “Approve this plan,” “Approved,” or “Approve plan <plan ID>.” If approval is ambiguous, ask for clarification and do not call `remediation-hosted-agent-a2a`.
+> 8. When approval is received, call `remediation-hosted-agent-a2a` with only the approved plan and bounded action details. Include the plan ID, exact audit area ID, target rating, updated violation_causes list, remediation context, and `approval_confirmation: Approved`.
+> 9. After `remediation-hosted-agent-a2a` responds, call `audit-status-agent-a2a` again to verify the result with a fresh status check.
 > 10. In the final response after remediation, summarize what was approved, what the remediation agent reported, the fresh status result, any remaining non-compliant areas, and the workshop POC disclaimer.
 >
-> Never call remediation-hosted-agent before explicit approval.
+> Never call `remediation-hosted-agent-a2a` before explicit approval.
 > Never remediate vague requests such as “make everything compliant.”
 > Never invent policy citations, audit evidence, status values, or remediation results.
 
@@ -124,14 +124,18 @@ In the Foundry editor for `orchestrator-prompt-agent`:
 3. Open the **Custom** tab.
 4. Select **A2A**.
 5. Configure:
+   - **Name:** `remediation-hosted-agent-a2a`
    - **A2A Agent Endpoint:**
      > https://{foundry-account}.services.ai.azure.com/api/projects/{project}/agents/remediation-hosted-agent/endpoint/protocols/a2a
-   - **Auth type:** **Agent Identity**
-   - **Audience:** `https://ai.azure.com`
-   - **Agent card path:** `agentCard/v1.0`
+   - **Auth type:** **Microsoft Entra Agent Identity**
 6. Click **Add** or **Confirm**.
+7. Click **Save** in the agent editor so the new Agent Connection is registered on the orchestrator before testing.
 
-Use the base endpoint in the endpoint field; do not append the card path. Keep Web Search removed.
+Use the base endpoint in the endpoint field. Foundry resolves the audience and agent card automatically. Keep Web Search removed.
+
+> **Important:** The Agent Connection name is an essential routing identifier. Use the exact name `remediation-hosted-agent-a2a` and keep it unchanged.
+
+The orchestrator's identity already has **Foundry Agent Consumer** from Part 3, and this same role covers calls to the new `remediation-hosted-agent-a2a` connection — no additional role assignment is needed here.
 
 ## 5) Validate the complete workflow
 
