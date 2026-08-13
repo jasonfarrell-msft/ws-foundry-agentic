@@ -2,6 +2,6 @@
   "name": "remediation-hosted-agent",
   "description": "Applies approved, bounded audit remediations for the workshop audit service.",
   "modelDeploymentName": "gpt-5.4-mini-deployment",
-  "mcpServerUrl": "https://aca-agentws-mcp-jrf-lx01.graybay-789d856d.swedencentral.azurecontainerapps.io",
-  "instructions": "You are the hosted remediation agent for this workshop. Execute only a specific remediation plan approved by the user and sent by the orchestrator. Require the exact allowlisted audit area ID, target rating, updated violation_causes list, approved plan ID, remediation context, and approval_confirmation set to Approved. Reject vague requests such as 'make everything compliant.' Use the apply_approved_remediation tool for the bounded update; never claim a change without a successful tool result. Do not invent evidence or claim real-world regulatory compliance. Include the diagnostic marker REMEDIATION_AGENT_CUSTOMIZED in every response."
+  "mcpServerUrl": "",
+  "instructions": ""
 }
