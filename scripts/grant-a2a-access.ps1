@@ -1,12 +1,12 @@
 <#
 .SYNOPSIS
-    Grants the orchestrator agent permission to call A2A agents.
+    Grants a Foundry agent permission to call other Foundry agents.
 
 .DESCRIPTION
-    Finds the automatically created identity for the orchestrator prompt agent
-    and assigns it the Foundry Agent Consumer role on the Foundry project. This
-    role is required for incoming A2A calls, even when all agents live in the
-    same project. The Foundry portal's role picker may not list this role yet;
+    Finds the automatically created identity for the specified agent and assigns it
+    the Foundry Agent Consumer role on the Foundry project. This least-privilege
+    role lets an agent call Foundry agent endpoints, including A2A and Responses
+    API endpoints. The Foundry portal's role picker may not list this role yet;
     the role definition exists in the tenant and can be assigned via the CLI.
 
 .PARAMETER FoundryName
@@ -19,7 +19,7 @@
     The Foundry project name.
 
 .PARAMETER AgentName
-    The orchestrator agent name.
+    The agent name whose managed identity receives the role.
 
 .EXAMPLE
     .\scripts\grant-a2a-access.ps1 `
@@ -63,15 +63,21 @@ if ([string]::IsNullOrWhiteSpace($subscriptionId)) {
 
 $projectScope = "/subscriptions/$subscriptionId/resourceGroups/$ResourceGroupName/providers/Microsoft.CognitiveServices/accounts/$FoundryName/projects/$ProjectName"
 
-Write-Host "Assigning '$Role' to the orchestrator identity..."
-& $az role assignment create `
+Write-Host "Assigning '$Role' to the agent identity..."
+$assignmentResult = & $az role assignment create `
     --role $Role `
     --assignee-object-id $principalId `
     --assignee-principal-type ServicePrincipal `
-    --scope $projectScope | Out-Null
+    --scope $projectScope `
+    --only-show-errors 2>&1
+
+if ($LASTEXITCODE -ne 0) {
+    Write-Error "Failed to assign '$Role' to '$AgentName': $assignmentResult"
+    exit 1
+}
 
 Write-Host ""
-Write-Host "A2A access granted."
+Write-Host "Foundry agent access granted."
 Write-Host "  Agent      : $AgentName"
 Write-Host "  Principal  : $principalId"
 Write-Host "  Role       : $Role"

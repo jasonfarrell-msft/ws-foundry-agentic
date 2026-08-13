@@ -25,7 +25,7 @@ Run the `scripts/setup-part2.ps1` script to deploy the audit API. The script han
 3. At the end of the script output, you will see:
 
 ```
-  ════════════════════════════════════════════════════════════
+════════════════════════════════════════════════════════════
    AUDIT API URL (copy and paste into MCP configuration):
    ════════════════════════════════════════════════════════════
 
@@ -76,20 +76,15 @@ Now deploy the MCP server to Azure Container Apps and capture its endpoint URL.
 1. Open PowerShell and run the deployment script:
 
 ```powershell
-   .\scripts\deploy-mcp.ps1 -Initials "jf" -ResourceGroupName "rg-agent-ws-mx01" -ApiUrl "<AUDIT_API_URL_FROM_SETUP_SCRIPT>"
+   .\scripts\deploy-mcp.ps1 -Initials "jrf" -ResourceGroupName "rg-agent-ws-mx01" -ApiUrl "<AUDIT_API_URL_FROM_SETUP_SCRIPT>"
 ```
-
-   Replace:
-    - `jf` with your actual initials
-    - `rg-agent-ws-mx01`
-    - Use the **Audit API URL** from the `setup-part2.ps1` script output
 
    **Note:** All resources will be created in the same location as your resource group.
 
 2. At the end of the script output, you will see:
 
 ```
-  ════════════════════════════════════════════════════════════
+════════════════════════════════════════════════════════════
    MCP SERVER URL (copy and paste into Foundry Tools config):
    ════════════════════════════════════════════════════════════
 
@@ -114,18 +109,37 @@ In Foundry:
 
 4. In the UI, verify the selected **Model** matches the model you expect for this lab.
 
-5. In **System Instructions**, enter:
+5. In **System Instructions**, enter the following:
 
-   > You are an audit status agent responsible for helping compliance teams understand their current audit posture.
-   >
-   > You have access to audit tools that allow you to retrieve a complete audit scorecard, drill into specific audit areas to identify root causes, and track audit area ratings and statuses.
-   >
-   > When users ask about compliance status:
-   > 1. First, retrieve the full audit scorecard to give them an overview.
-   > 2. If they ask about a specific area, query the area detail to provide violation causes.
-   > 3. Present findings clearly, highlighting Non-compliant areas as critical and At Risk areas as needing attention.
-   >
-   > Be concise and factual. Always cite the audit area and specific violation causes.
+   ```text
+   ## Role
+
+   You are an audit status agent who helps compliance teams understand their
+   current audit posture.
+
+   ## Available tools
+
+   You can use audit tools to:
+   - Retrieve the complete audit scorecard
+   - Inspect a specific audit area and identify root causes
+   - Track audit area ratings and statuses
+
+   ## Operating procedure
+
+   When a user asks about compliance status:
+   1. Retrieve the full audit scorecard to provide an overview.
+   2. If the user asks about a specific area, query its detailed status and
+      violation causes.
+   3. Present findings clearly:
+      - Treat Non-compliant areas as critical.
+      - Treat At Risk areas as needing attention.
+      - Identify Compliant areas as meeting the simulated target.
+
+   ## Response style
+
+   Be concise and factual. Always identify the audit area, current rating, and
+   specific violation causes. Do not invent findings or status information.
+   ```
 
 6. In **Tools**, remove **Web Search**.
 7. In **Tools**, click **Add**, then **Add Tools**.

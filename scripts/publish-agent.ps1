@@ -60,18 +60,18 @@ function Write-RbacGuidance {
 
     Write-Host ""
     Write-Host "A2A runtime RBAC guidance:" -ForegroundColor Yellow
-    Write-Host "Hosted agent '$AgentName' needs the 'Foundry User' role at the Foundry project scope so it can call the Foundry Responses API at runtime." -ForegroundColor Yellow
+    Write-Host "Hosted agent '$AgentName' needs the 'Foundry Agent Consumer' role at the Foundry project scope so it can call the Foundry Responses API at runtime." -ForegroundColor Yellow
 
     if ($PrincipalId) {
         Write-Host "Ask a platform owner to run:" -ForegroundColor Yellow
-        Write-Host "az role assignment create --assignee-object-id $PrincipalId --assignee-principal-type ServicePrincipal --role `"Foundry User`" --scope `"$ProjectScope`"" -ForegroundColor Cyan
+        Write-Host "az role assignment create --assignee-object-id $PrincipalId --assignee-principal-type ServicePrincipal --role `"Foundry Agent Consumer`" --scope `"$ProjectScope`"" -ForegroundColor Cyan
         return
     }
 
     Write-Host "After the first publish, retrieve the hosted agent identity:" -ForegroundColor Yellow
     Write-Host "az rest --method get --url `"$ProjectEndpoint/agents/$($AgentName)?api-version=v1`" --resource https://ai.azure.com --query `"instance_identity.principal_id`" -o tsv" -ForegroundColor Cyan
     Write-Host "Then ask a platform owner to grant:" -ForegroundColor Yellow
-    Write-Host "az role assignment create --assignee-object-id <principal-id> --assignee-principal-type ServicePrincipal --role `"Foundry User`" --scope `"$ProjectScope`"" -ForegroundColor Cyan
+    Write-Host "az role assignment create --assignee-object-id <principal-id> --assignee-principal-type ServicePrincipal --role `"Foundry Agent Consumer`" --scope `"$ProjectScope`"" -ForegroundColor Cyan
 }
 
 function Resolve-A2AConnectionIds {
@@ -144,7 +144,7 @@ function Test-A2ARuntimeRbac {
         --assignee-object-id $principalId `
         --scope $ProjectScope `
         --include-inherited `
-        --query "[?roleDefinitionName=='Foundry User'] | length(@)" `
+        --query "[?roleDefinitionName=='Foundry Agent Consumer'] | length(@)" `
         --output tsv `
         --only-show-errors 2>&1
 
@@ -234,10 +234,10 @@ if ($projectScope) {
 
     switch ($rbacCheck.Status) {
         "present" {
-            Write-Host "  [OK] Hosted agent identity already has 'Foundry User' at the project scope." -ForegroundColor Green
+            Write-Host "  [OK] Hosted agent identity already has 'Foundry Agent Consumer' at the project scope." -ForegroundColor Green
         }
         "missing" {
-            Write-Host "Error: Hosted agent identity is missing 'Foundry User' at the Foundry project scope." -ForegroundColor Red
+            Write-Host "Error: Hosted agent identity is missing 'Foundry Agent Consumer' at the Foundry project scope." -ForegroundColor Red
             Write-Host "Publishing now would produce a hosted agent that cannot initialize its runtime." -ForegroundColor Red
             Write-RbacGuidance `
                 -AgentName $config.name `

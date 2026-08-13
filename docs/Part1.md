@@ -20,35 +20,31 @@ Complete this section exactly in the Azure portal with fixed values:
    - Accept all other default settings
 5. Complete the wizard and wait for deployment to finish.
 
-## 2) Deploy GPT-5.4 model
-
-**Note:** GPT-5.4 is recommended for this workshop, but any GPT model version **5.2 or higher** is acceptable. Previous-generation models are not recommended because they are generally less reliable for tool-calling behavior used in later parts.
+## 2) Deploy a model
 
 1. In the Azure portal, navigate to resource group **`rg-agent-ws-mx01`**.
 2. Select the newly created **Microsoft Foundry** instance and open it to access the Foundry portal.
 3. Once in the Foundry portal, open **`main-project`** in Microsoft Foundry.
 4. In the Foundry portal, select **Build** from the top navigation, then select **Models** from the left navigation.
 5. Select **Deploy** button from the far right, choose **Base Model**.
-6. Select model **GPT-5.4-nano** (or another GPT 5.2+ model if GPT-5.4 is unavailable in your region/quota).
+6. Deploy one of the following models. These models are officially supported by Foundry IQ as the Chat completions model. Try them in order until one deploys successfully in your region/quota:
 
-    **If you hit a quota error deploying GPT-5.4-nano**, choose one of the following instead. These models are officially supported by Foundry IQ as the knowledge base's Chat completions model. Availability and quota vary by subscription/tenant, so try them in order until one deploys successfully:
     - `gpt-5.4-mini`
     - `gpt-5.4`
     - `gpt-5.2`
     - `gpt-5.1`
     - `gpt-5-mini`
 
-    > **Note:** GPT-5.5 is not supported as the Foundry IQ Chat completions model. If you select GPT-5.5, retrieval can fail with a `400 BadRequest` stating that function tools with `reasoning_effort` are not supported for that model in `/v1/chat/completions`.
 7. Click **Deploy** on the right-hand side and click **Custom settings**.
 8. Set the following:
-    - Deployment Name: Use a name that matches the model you selected, for example **`gpt-5.4-nano-deployment`**
+    - Deployment Name: Use the model name with `-deployment` appended, for example **`gpt-5.4-mini-deployment`**
     - Deployment Type: **Global Standard**
     - Max out Tokens per Minute Rate Limit
 9. Click **Deploy** to deploy the model
 
 Once deployed, you will land on the **Model Playground** within Foundry. You can ask questions and provide instructions to see how the model responds.
 
-> Throughout the rest of this guide, references to `gpt-5.4-nano-deployment` mean "the chat-model deployment you created in this step." Substitute your actual deployment name if you used one of the fallback models above.
+> Throughout the rest of this guide, references to deployment names mean "the chat-model deployment you created in this step." Use the actual deployment name from step 8 (e.g., `gpt-5.4-mini-deployment`).
 
 ## 3) Prepare your data
 
@@ -89,7 +85,7 @@ After the storage account finishes provisioning, copy its connection string and 
 ./scripts/corpus-upload.ps1 -ConnectionString "<paste-connection-string-here>"
 ```
 
-This script creates the `docs` container if needed and uploads all files from `data/docs`, overwriting blobs with the same name. No `az login` is required.
+This script creates the `docs` container if needed and uploads all files from `data/docs`, overwriting blobs with the same name.
 
 > **Security note:** Microsoft does not recommend using connection strings for Azure Storage connectivity. Connection strings contain shared keys that grant full access to the storage account and should never be committed to source control or shared. They are used here for workshop simplicity only and are not a production-grade practice. In production, use Managed Identity or Azure AD-based authentication instead.
 
@@ -101,7 +97,7 @@ Your workshop corpus is already in Azure Blob Storage in the `docs` container. I
 
 ### Create an Azure AI Search service
 
-Foundry IQ requires an Azure AI Search service that supports **agentic retrieval** and **semantic ranker**. Both are available on the **Basic** tier and above. The Free tier does not qualify.
+Foundry IQ requires an Azure AI Search service that supports **agentic retrieval** and **semantic ranker**.
 
 1. Open the **Azure portal**.
 2. Search for **Azure AI Search** and select it.
@@ -125,8 +121,8 @@ Foundry IQ uses the Azure AI Search system-assigned managed identity for two sep
 #### Enable the Search managed identity
 
 1. Open the Azure AI Search service **`srch-agentws-<initials>-lx01`**.
-2. In the left navigation, select **Settings** → **Identity**.
-3. On the **System assigned** tab, set **Status** to **On**, select **Save**, and record the displayed object ID.
+2. In the left navigation, select **Security + networking** → **Identity**.
+3. On the **System assigned** tab, set **Status** to **On**, select **Save**. Wait for the operation to complete
 
 #### Assign Cognitive Services User on the Foundry resource
 
@@ -138,10 +134,10 @@ Foundry IQ uses the Azure AI Search system-assigned managed identity for two sep
 
 This allows Azure AI Search to call the embedding and chat model deployments used by the knowledge base.
 
-#### Assign Storage Blob Data Reader on the `docs` container
+#### Assign Storage Blob Data Reader on the Storage Account container
 
 1. Open the storage account created in Section 3.
-2. Open **Containers**, select the **`docs`** container, and select **Access control (IAM)**.
+2. Select **Access control (IAM)**.
 3. Select **Add** → **Add role assignment**.
 4. Select the **Storage Blob Data Reader** role.
 5. For the member, choose **Managed identity**, select the Azure AI Search service, and select **Review + assign**.
@@ -157,25 +153,25 @@ This allows Azure AI Search to read and index the workshop documents. Wait a few
 5. Click **Create a knowledge base**.
 6. Set the following fields before selecting a knowledge source:
     - **Name:** `kb-policy-audit-documents`
+    - **Chat completions model:** Select your deployed model
     - **Retrieval reasoning effort:** `low`
-    - **Retrieval instructions:** `Use only the connected corpus. Prioritize the most relevant policy/audit documents and sections that directly answer the question, preferring authoritative evidence with clear citation metadata. Do not use external sources.`
     - **Output mode:** `Answer synthesis`
     - **Answer instructions:** `Answer using only retrieved evidence. Be concise, cite sources, state confidence, and identify missing evidence.`
-    - **Chat completions model:** Select the deployed `gpt-5.4-nano-deployment` model. **Do not select a reasoning-effort model such as GPT-5.5 here.** Foundry IQ calls this model over `/v1/chat/completions`, and reasoning-effort models combined with function/tool calling on that endpoint return a `400 BadRequest` (`Function tools with reasoning_effort are not supported for this model in /v1/chat/completions`). If quota forces you off `gpt-5.4-nano-deployment`, choose another non-reasoning GPT-5.x deployment instead.
-7. Select **Add knowledge source**, then choose **Azure Blob Storage**.
+    - **Retrieval instructions:** `Use only the connected corpus. Prioritize the most relevant policy/audit documents and sections that directly answer the question, preferring authoritative evidence with clear citation metadata. Do not use external sources.`
+7. Select **Add knowledge source**, then choose **Azure Blob Storage**. ONLY modify the fields listed below:
     - **Name:** `ks-azureblob-docs`
     - **Storage account:** Select the storage account you created in Section 3.
     - **Container name:** `docs`
     - **Content extraction mode:** `Standard`
-12. Select an existing `text-embedding-3-small` deployment for **Embedding model**. If none exists, deploy the `text-embedding-3-small` model using the available deployment name, then select it. **Do not set or change the Chat completions model in this step; it was already selected when you configured the knowledge base in Step 6.**
+12. For **Embedding model,** deploy an instance of`text-embedding-3-small` using the **Browse more models** option
 13. Click **Create**.
-14. After completing the knowledge source wizard, you are returned to the knowledge base configuration page.
-15. Select **Save knowledge base** to save your changes before continuing.
+14. After completing the knowledge source wizard, you are returned to the knowledge base configuration page
+15. Select **Save knowledge base** to save your changes
 16. Refresh the knowledge base details page and confirm the **Knowledge source** status changes from **Creating** to **Active** before continuing.
 
 ## 5) Create and configure the policy-audit-info-agent
 
-The data and Foundry IQ knowledge base are ready before you create the agent. Build the agent with the final system prompt below, attach the active knowledge base, and remove the default Web Search tool.
+Now build the agent with the final system prompt below, attach the active knowledge base, and remove the default Web Search tool.
 
 1. In the Foundry portal, open `main-project` and select **Build**.
 2. Select **Agents** from the left navigation.

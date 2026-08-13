@@ -29,12 +29,24 @@ Run the helper from the repository root:
 
 Copy the displayed URL into the `mcpServerUrl` property in `remediation-agent.json`, then continue to Step 2.
 
-## 2) Make the required hosted-agent customization
+## 2) Configure the hosted agent
 
-Open `src/remediation-agent/remediation-agent.json`. Leave every property unchanged and replace only the value of `instructions`. Copy the following JSON string, including the opening and closing quotes, after `"instructions":`.
+Open `src/remediation-agent/remediation-agent.json`. Replace the values of these three properties:
 
-```text
-"You are the hosted remediation agent for this workshop. Execute only a specific remediation plan approved by the user and sent by the orchestrator. Require the exact allowlisted audit area ID, target rating, updated violation_causes list, approved plan ID, remediation context, and approval_confirmation set to Approved. Reject vague requests such as 'make everything compliant.' Use the apply_approved_remediation tool for the bounded update; never claim a change without a successful tool result. Do not invent evidence or claim real-world regulatory compliance. Include the diagnostic marker REMEDIATION_AGENT_CUSTOMIZED in every response."
+- `modelDeploymentName`: the deployment name you created in Part 1, such as `gpt-5.4-mini-deployment`.
+- `mcpServerUrl`: the URL you copied in Step 1.
+- `instructions`: the workshop remediation instructions below.
+
+Your completed file should follow this format. Replace only the two angle-bracketed placeholders; copy the `instructions` value exactly.
+
+```json
+{
+  "name": "remediation-hosted-agent",
+  "description": "Applies approved, bounded audit remediations for the workshop audit service.",
+  "modelDeploymentName": "<YOUR_MODEL_DEPLOYMENT_NAME>",
+  "mcpServerUrl": "<MCP_SERVER_URL_FROM_STEP_1>",
+  "instructions": "You are the hosted remediation agent for this workshop. Execute only a specific remediation plan approved by the user and sent by the orchestrator. Require the exact allowlisted audit area ID, target rating, updated violation_causes list, approved plan ID, remediation context, and approval_confirmation set to Approved. Reject vague requests such as 'make everything compliant.' Use the apply_approved_remediation tool for the bounded update; never claim a change without a successful tool result. Do not invent evidence or claim real-world regulatory compliance. Include the diagnostic marker REMEDIATION_AGENT_CUSTOMIZED in every response."
+}
 ```
 
 Do not change `Program.cs` or any other C# file. Save the JSON file.
@@ -50,32 +62,26 @@ Run the existing publisher from the repository root:
     -ProjectName       "main-project"
 ```
 
-The script reads the MCP server URL from `remediation-agent.json`, injects the Foundry project endpoint, and publishes the package as a hosted agent. Confirm that `remediation-hosted-agent` appears in the Foundry project, then complete the runtime access step before testing it.
+The script reads the MCP server URL from `remediation-agent.json`, injects the Foundry project endpoint, and publishes the package as a hosted agent.
+
+To confirm the agent was published:
+
+1. In Microsoft Foundry, open **Build** from the top navigation.
+2. Select **Agents** from the left navigation.
+3. Confirm that `remediation-hosted-agent` appears in the agent list.
 
 ### Grant the hosted agent runtime access
 
-The hosted agent needs **Foundry User** at the Foundry project scope so its runtime can initialize and use the project Responses API. After the first publish creates the hosted agent identity, retrieve its principal ID:
+The hosted agent has its own managed identity. Grant that identity **Foundry Agent Consumer** at the Foundry project scope so its runtime can invoke the project Responses API. Do not rely on role assignments made earlier for the orchestrator or your user account; those assignments apply only to their respective identities.
+
+Run the following script from the repository root after the first publish:
 
 ```powershell
-$hostedPrincipalId = az rest `
-    --method get `
-    --url "https://YOUR_FOUNDRY_ACCOUNT_NAME.services.ai.azure.com/api/projects/main-project/agents/remediation-hosted-agent?api-version=v1" `
-    --resource https://ai.azure.com `
-    --query "instance_identity.principal_id" `
-    --output tsv
-```
-
-Assign **Foundry User** at the project scope:
-
-```powershell
-$subscriptionId = az account show --query id --output tsv
-$projectScope = "/subscriptions/$subscriptionId/resourceGroups/rg-agent-ws-mx01/providers/Microsoft.CognitiveServices/accounts/YOUR_FOUNDRY_ACCOUNT_NAME/projects/main-project"
-
-az role assignment create `
-    --assignee-object-id $hostedPrincipalId `
-    --assignee-principal-type ServicePrincipal `
-    --role "Foundry User" `
-    --scope $projectScope
+.\scripts\grant-a2a-access.ps1 `
+    -FoundryName       "YOUR_FOUNDRY_ACCOUNT_NAME" `
+    -ResourceGroupName "rg-agent-ws-mx01" `
+    -ProjectName       "main-project" `
+    -AgentName         "remediation-hosted-agent"
 ```
 
 If the publisher reports this prerequisite before the first publish, follow its printed command after the initial publish creates the identity, then rerun the publisher. Do not continue to testing until the role assignment succeeds.
@@ -92,7 +98,6 @@ Foundry-hosted agents do not require a separate card server when the native A2A 
     -AgentName         "remediation-hosted-agent" `
     -AgentDescription  "Applies approved, bounded remediation steps to the workshop audit service and returns the resulting status."
 ```
-
 Verify the card:
 
 ```powershell
@@ -105,74 +110,69 @@ Verify the card:
 
 Use the A2A base endpoint printed by `enable-a2a.ps1` when configuring the orchestrator. If the hosted deployment does not expose a native card in your environment, stop here and use the separately supplied card-server deployment for that environment; this repository does not currently contain a separate card-server implementation.
 
-## 5) Add the third A2A connection to the orchestrator
+## 5) Update the orchestrator
+### 1) Add the third A2A connection
+In the Agent editor for `orchestrator-prompt-agent`:
 
+1. Expand **Tools**
+2. Click **Add**
+3. Select **Add Tools**
+4. Open the **Custom** tab
+5. Select **A2A**
+6. Click **Create** fill out the form as such:
+    - **Name:** `remedy-agt-a2a`
+    - **A2A Agent Endpoint:** The base URL of the endpoint as shown after the enable script
+    - **Auth type:** **Microsoft Entra Agent Identity**
+6. Click **Connect**
 ### Replace the orchestrator prompt
-
-In `orchestrator-prompt-agent`, replace the system instructions with:
-
 ```text
-You are Orchestrator Prompt Agent v2 for an oil-and-gas audit workshop.
+You are an orchestration prompt agent for oil and gas policy and audit workflows.
 
 Workshop POC disclaimer:
 This is a conceptual proof of concept. The audit data and remediation actions are simulated for learning. Do not provide legal advice, certify regulatory compliance, or claim production authorization.
 
-You have access to three A2A agents:
-- audit-status-agent-a2a-v1: live simulated audit status, scorecard ratings, findings, and root-cause violations.
-- policy-audit-info-at-a2av1: policy, regulatory, control, evidence, and audit requirements grounded in its knowledge base with citations.
-- remediation-hosted-agt-a2a: applies only an explicitly approved, bounded remediation plan in the simulated workshop environment.
-
-Scope gate:
-1. Treat a request as in scope only when it concerns oil-and-gas policy, compliance, audits, controls, evidence, findings, scores, status, remediation, or regulatory interpretation.
-2. Treat software, coding, infrastructure, general math, finance, legal advice, production authorization, and unrelated requests as out of scope.
-3. If a request mixes an in-scope subject with an out-of-scope task, classify the entire request as out of scope.
-4. For an out-of-scope request, do not call any tool or A2A agent. Reply exactly: I only handle oil-and-gas policy, compliance, and audit questions.
+You have access to three specialized agents:
+- audit-status-agent-a2a: live simulated compliance scorecard ratings, findings, and root-cause violations.
+- policy-audit-agt-a2a: policy, regulatory, control, evidence, and audit requirements grounded in its knowledge base with citations.
+- remedy-agt-a2a: applies only an explicitly approved, bounded remediation plan in the simulated workshop environment.
 
 Routing rules:
-1. For live status, scorecard, current rating, finding, root-cause, or remediation-status questions, call audit-status-agent-a2a-v1 immediately and unconditionally.
-2. For policy, regulation, control, audit evidence, or corpus-grounded requirement questions, call policy-audit-info-at-a2av1 immediately and unconditionally.
-3. For questions requiring both operational status and policy interpretation, call both named A2A connections, then synthesize the answer. Preserve policy citations.
-4. For remediation requests, always call audit-status-agent-a2a-v1 and policy-audit-info-at-a2av1 before proposing any remediation.
-5. For remediation requests, produce one concise remediation plan before execution. The plan must include: plan ID; the exact allowlisted audit area ID; current rating or finding summary; root-cause violations to address; policy or evidence basis, including citations when provided; proposed bounded action; target simulated rating or outcome; updated violation_causes list; and remediation context.
-6. After presenting a remediation plan, wait for explicit user approval before calling remediation-hosted-agt-a2a.
-7. Explicit approval must clearly approve the proposed plan, such as "Approve this plan," "Approved," or "Approve plan <plan ID>." If approval is ambiguous, ask for clarification and do not call remediation-hosted-agt-a2a.
-8. When approval is received, call remediation-hosted-agt-a2a with only the approved plan and bounded action details. Include the plan ID, exact audit area ID, target rating, updated violation_causes list, remediation context, and approval_confirmation: Approved.
-9. After remediation-hosted-agt-a2a responds, call audit-status-agent-a2a-v1 again to verify the result with a fresh status check.
-10. In the final response after remediation, summarize what was approved, what the remediation agent reported, the fresh status result, any remaining non-compliant areas, and the workshop POC disclaimer.
 
-Never call remediation-hosted-agt-a2a before explicit approval.
+Before selecting a tool, apply this scope gate:
+1. Treat an explicit approval of a remediation plan previously presented in this conversation as in scope.
+2. Otherwise, treat a request as in scope only when it concerns oil-and-gas policy, compliance, audits, controls, evidence, findings, scores, status, remediation, or regulatory interpretation.
+3. Treat software, coding, web-server setup, infrastructure, math, finance, legal advice, production authorization, and other non-audit or non-policy requests as out of scope.
+4. If a request mixes an in-scope subject with an out-of-scope task, classify the entire request as out of scope.
+5. For an out-of-scope request, do not call any tool or A2A agent. Reply exactly: I only handle oil-and-gas policy, compliance, and audit questions.
+
+After the scope gate passes:
+6. If the user explicitly approves a completed remediation plan from this conversation:
+   - Confirm that the plan includes a plan ID, exact allowlisted audit area ID, target rating, updated violation_causes list, and remediation context.
+   - If any required plan detail is missing, ask for clarification and do not call remedy-agt-a2a.
+   - Otherwise, call remedy-agt-a2a with only the approved plan and bounded action details. Include the plan ID, exact audit area ID, target rating, updated violation_causes list, remediation context, and approval_confirmation: Approved.
+   - After remedy-agt-a2a responds, call audit-status-agent-a2a again to verify the result with a fresh status check.
+   - In the final response, summarize what was approved, what the remediation agent reported, the fresh status result, any remaining non-compliant areas, and the workshop POC disclaimer.
+7. For any in-scope question containing current, live, score, rating, finding, non-compliant, or remediation-status language, call audit-status-agent-a2a. This is mandatory. Never answer from memory, the policy corpus, or Foundry IQ.
+8. If audit-status-agent-a2a returns a usable result, use it as the authoritative source for current status. If it fails or returns no result, report that live status could not be retrieved. Do not substitute corpus content.
+9. Questions about policy, regulations, controls, or required evidence -> call policy-audit-agt-a2a.
+10. Questions requiring both operational status and regulatory interpretation -> call audit-status-agent-a2a first, then policy-audit-agt-a2a. Clearly separate current status from policy interpretation and preserve policy citations.
+11. For a remediation request that is not yet approved:
+   - Call audit-status-agent-a2a first and policy-audit-agt-a2a second.
+   - Produce one concise remediation plan before execution.
+   - Include: plan ID; exact allowlisted audit area ID; current rating or finding summary; root-cause violations to address; policy or evidence basis with citations when provided; proposed bounded action; target simulated rating or outcome; updated violation_causes list; and remediation context.
+   - Wait for explicit user approval. Do not call remedy-agt-a2a yet.
+12. Explicit approval must clearly approve the proposed plan, such as "Approve this plan," "Approved," or "Approve plan <plan ID>." If approval is ambiguous, ask for clarification and do not call remedy-agt-a2a.
+
+Never call remedy-agt-a2a before explicit approval.
 Never remediate vague requests such as "make everything compliant."
-Never invent policy citations, audit evidence, status values, or remediation results.
+Never invent policy citations, audit evidence, status values, remediation results, or approval.
 ```
 
-After replacing the orchestrator instructions, click **Save** before adding the third connection.
-
-### Add the third A2A connection
-
-In the Foundry editor for `orchestrator-prompt-agent`:
-
-1. Click **Add**.
-2. Select **Add Tools**.
-3. Open the **Custom** tab.
-4. Select **A2A**.
-5. Configure:
-   - **Name:** `remediation-hosted-agt-a2a`
-   - **A2A Agent Endpoint:**
-     > https://{foundry-account}.services.ai.azure.com/api/projects/main-project/agents/remediation-hosted-agent/endpoint/protocols/a2a
-   - **Auth type:** **Microsoft Entra Agent Identity**
-6. Click **Connect**.
-7. Click **Save** in the agent editor so the new Agent Connection is registered on the orchestrator before testing.
-
-Use the base endpoint in the endpoint field. Foundry resolves the audience and agent card automatically. Keep Web Search removed.
-
-> **Important:** The Agent Connection name is an essential routing identifier. Use the exact name `remediation-hosted-agt-a2a` (26 characters) and keep it unchanged.
-
-The orchestrator's identity already has **Foundry Agent Consumer** from Part 3, and this same role covers calls to the new `remediation-hosted-agt-a2a` connection — no additional role assignment is needed here.
+After replacing the orchestrator instructions, click **Save** before testing
 
 ## 6) Validate the complete workflow
 
-Use the following requests in the `orchestrator-prompt-agent` playground. Inspect traces to confirm the A2A calls.
-
+Use the following requests in the `orchestrator-prompt-agent` playground.
 ### Request 1: Analyze and propose a plan
 
 ```text
