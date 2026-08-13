@@ -37,7 +37,7 @@ internal sealed class AuditTools
         _options = options;
     }
 
-    [McpServerTool(Name = "get_audit_scorecard"), Description("Retrieve the complete audit scorecard with all 7 audit areas and their current compliance status (Compliant, At Risk, or Non-compliant)")]
+    [McpServerTool(Name = "get_audit_scorecard"), Description("")]
     public async Task<string> GetAuditScorecard()
     {
         using var client = _httpClientFactory.CreateClient();
@@ -47,8 +47,8 @@ internal sealed class AuditTools
         return content;
     }
 
-    [McpServerTool(Name = "get_audit_area_detail"), Description("Retrieve detailed information about a specific audit area, including its current rating and the root causes of any violations")]
-    public async Task<string> GetAuditAreaDetail([Description("The unique identifier for the audit area (e.g., 'spcc-compliance', 'psm-program', 'subpart-w-ghg')")] string area_id)
+    [McpServerTool(Name = "get_audit_area_detail"), Description("")]
+    public async Task<string> GetAuditAreaDetail([Description("")] string area_id)
     {
         using var client = _httpClientFactory.CreateClient();
         using var response = await client.GetAsync($"{_options.BaseUrl}/audit/{area_id}");
@@ -57,11 +57,11 @@ internal sealed class AuditTools
         return content;
     }
 
-    [McpServerTool(Name = "update_audit_area"), Description("Update an audit area's compliance rating and violation causes (used for tracking remediation progress)")]
+    [McpServerTool(Name = "update_audit_area"), Description("")]
     public async Task<string> UpdateAuditArea(
-        [Description("The unique identifier for the audit area")] string area_id,
-        [Description("The new compliance rating (Compliant, At Risk, or Non-compliant)")] string rating,
-        [Description("Updated list of violation causes")] string[] violation_causes)
+        [Description("")] string area_id,
+        [Description("")] string rating,
+        [Description("")] string[] violation_causes)
     {
         using var client = _httpClientFactory.CreateClient();
 
