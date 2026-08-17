@@ -45,13 +45,8 @@ The MCP server is a C# application that exposes three tools to agents. In this s
 ### Update the MCP server source code
 
 1. Open the file **`src/mcp/Program.cs`** in the repository.
-2. Find the `AuditTools` class and update the empty `Description` attributes on the three MCP methods and their parameters.
+2. Find the `AuditTools` class (Line 29) and update the empty `Description` attributes on the three MCP methods and their parameters.
 3. Use the tool descriptions below as the text to add in `src/mcp/Program.cs`. You are editing the C# source file; do not paste these descriptions into the Foundry portal.
-4. Save `src/mcp/Program.cs` before continuing to the deployment step.
-
-### Tool Descriptions
-
-The three audit tools are:
 
 **Tool 1: get_audit_scorecard**
 - **Description:** Retrieve the complete audit scorecard with all 7 audit areas and their current compliance status (Compliant, At Risk, or Non-compliant)
@@ -68,6 +63,8 @@ The three audit tools are:
     - `area_id` (string, required) — The unique hyphenated identifier for the audit area
     - `rating` (string, required) — The new compliance rating (Compliant, At Risk, or Non-compliant)
     - `violation_causes` (array, required) — Updated list of violation causes
+
+4. Save `src/mcp/Program.cs`.
 
 ### Deploy the MCP Server
 

@@ -86,13 +86,13 @@ The portal does not provide a reliable connected/ready indicator for this step. 
 
 ## 3) Create the Prompt Orchestrator agent in Foundry
 
-1. In the Foundry portal, select **New agent** → **Build your agent**.
-2. Create a **Prompt Agent** named `orchestrator-prompt-agent`.
-3. Use your model deployment from Part 1.
-4. Set the system instructions to:
-5. **Save** the agent
+1. In the Foundry portal, click **Build** along the top, then select **Agents**
+2. Click **New agent** → **Build an agent**.
+3. Create a **Prompt Agent** named `orchestrator-prompt-agent`.
+4. Use your model deployment from Part 1.
+5. Set the system instructions to:
 
-**Important:** The Agent Connection names are essential routing identifiers. Use the exact names `audit-status-agent-a2a-v1` (25 characters) and `policy-audit-info-at-a2av1` (26 characters) when you register the connections, and keep those names unchanged. All Agent Connection names must be 27 characters or fewer.
+**Important:** The Agent Connection names are essential routing identifiers. Use the exact names `audit-status-agent-a2a` and `policy-audit-agt-a2a` when you register the connections, and keep those names unchanged.
 
 ```text
 You are an orchestration prompt agent for oil and gas policy and audit workflows.
@@ -119,6 +119,7 @@ Here are the agent connections:
 - audit-status-agent-a2a
 - policy-audit-agt-a2a
 ```
+6. **Save** the agent
 
 ### Required: grant the orchestrator identity A2A access
 
@@ -149,7 +150,7 @@ The A2A tool accepts the target agent's **base A2A endpoint**. Do not append an 
 5. Select **A2A** and press **Create**
 6. A form appears. Fill in the following (ensure **Connect from Foundry** is selected):
     - **Name:** `audit-status-agent-a2a`
-    - **A2A Agent Endpoint:** Paste the first **base A2A URL** (saved from Step 1):
+    - **A2A Agent Endpoint:** Paste the first **base A2A URL** [ends with /a2a] (saved from Step 1, from `enable` NOT `verify`):
     - **Authentication:** Microsoft Entra Agent Identity
 6. Click **Connect**
 7. Repeat steps 1–4, then fill in:
@@ -157,7 +158,7 @@ The A2A tool accepts the target agent's **base A2A endpoint**. Do not append an 
     - **A2A Agent Endpoint:** Paste the second **base A2A URL**:
     - **Authentication:** Select **Microsoft Entra Agent Identity**
 8. Click **Connect**
-9. Click **Save**.
+9. **Save** the agent.
 
 **Note:** The names here are vital as we will call them out specifically in the system prompt above. Leave them as they appear
 ---

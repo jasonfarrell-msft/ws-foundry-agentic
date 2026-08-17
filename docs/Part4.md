@@ -108,7 +108,7 @@ Verify the card:
     -AgentName         "remediation-hosted-agent"
 ```
 
-Use the A2A base endpoint printed by `enable-a2a.ps1` when configuring the orchestrator. If the hosted deployment does not expose a native card in your environment, stop here and use the separately supplied card-server deployment for that environment; this repository does not currently contain a separate card-server implementation.
+Use the A2A base endpoint printed by `enable-a2a.ps1` (ending in /a2a) when configuring the orchestrator. If the hosted deployment does not expose a native card in your environment, stop here and use the separately supplied card-server deployment for that environment; this repository does not currently contain a separate card-server implementation.
 
 ## 5) Update the orchestrator
 ### 1) Add the third A2A connection

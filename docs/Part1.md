@@ -14,7 +14,7 @@ Complete this section exactly in the Azure portal with fixed values:
 3. Search for **Microsoft Foundry**, choose **Foundry** from the left nav and select **Create**.
 4. In the creation wizard:
    - Select resource group: **`rg-agent-ws-mx01`**
-   - Set the name to **`foundry-agent-test-jrf-mx01`** (jrf is your initials)
+   - Set the name to **`foundry-agent-ws-jrf-mx01`** (jrf is your initials)
    - Set the default project name to: **`main-project`**
    - Keep networking set to **Public**
    - Accept all other default settings
@@ -170,8 +170,6 @@ This allows Azure AI Search to read and index the workshop documents. Wait a few
 16. Refresh the knowledge base details page and confirm the **Knowledge source** status changes from **Creating** to **Active** before continuing.
 
 ## 5) Create and configure the policy-audit-info-agent
-
-Now build the agent with the final system prompt below, attach the active knowledge base, and remove the default Web Search tool.
 
 1. In the Foundry portal, open `main-project` and select **Build**.
 2. Select **Agents** from the left navigation.
