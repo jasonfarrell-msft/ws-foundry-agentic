@@ -1,4 +1,10 @@
 # Part 2: Model Context Protocol (MCP) & Agent Integration
+ 
+[Final Architecture Diagram](./final-architecture.svg)
+
+### What you will do
+In this part, you will deploy the audit API and MCP server, configure MCP tool descriptions, connect the `audit-status-agent` to MCP in Foundry, and validate end-to-end tool calls. Color alignment: Green.
+
 ### Prerequisites & Assumptions
 
 **Assumption: Part 1 is complete.**

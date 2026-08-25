@@ -1,4 +1,9 @@
 # Part 4: Hosted Remediation Agent
+ 
+[Final Architecture Diagram](./final-architecture.svg)
+
+### What you will do
+In this part, you will configure and publish the hosted remediation agent, grant and verify runtime/A2A access, integrate it into the orchestrator, and validate an approval-gated remediation workflow with post-change status verification. Color alignment: Orange.
 
 ## Objective
 

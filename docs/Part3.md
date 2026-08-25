@@ -1,4 +1,9 @@
 # Part 3: Agent-to-Agent (A2A) Orchestration with a Prompt Orchestrator
+ 
+[Final Architecture Diagram](./final-architecture.svg)
+
+### What you will do
+In this part, you will enable A2A for the existing specialist agents, create and configure the orchestrator prompt agent, wire A2A connections, and validate routing across status, policy, mixed, and out-of-scope requests. Color alignment: Blue.
 
 ## Objective
 

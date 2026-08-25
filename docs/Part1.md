@@ -1,5 +1,10 @@
 # Part 1 — Microsoft Foundry Foundation Setup
 
+[Final Architecture Diagram](./final-architecture.svg)
+
+### What you will do
+In this part, you will establish the workshop foundation by provisioning Foundry and core services, loading the shared corpus, configuring Foundry IQ, and creating the policy-audit-info-agent for grounded policy and audit responses. Color alignment: Purple.
+
 ### 1) Create Microsoft Foundry resource and project
 
 Complete this section exactly in the Azure portal with fixed values:
