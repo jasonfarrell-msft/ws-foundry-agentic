@@ -2,12 +2,9 @@
 
 [Final Architecture Diagram](./final-architecture.svg)
 
-### What you will do
-In this part, you will use the Application Insights **Agents (Preview)** blade to inspect the telemetry produced by everything you built in Parts 1–4. You will review agent runs, tool calls, model usage, token consumption, and errors, then drill into an individual end-to-end transaction to follow a single orchestrated request across the orchestrator, the A2A sub-agents, the MCP server, and the audit API. Color alignment: this part spans all four colors, because it observes the components you built in Parts 1–4 rather than adding new ones.
-
 ## Objective
 
-Turn the telemetry wiring from Part 1 into practical insight. By the end of this part you should be able to answer, from Application Insights alone:
+Use the Application Insights **Agents (Preview)** blade on `appi-agentapp-<initials>-mx01` to inspect the telemetry produced by everything you built in Parts 1–4 and turn the telemetry wiring from Part 1 into practical insight. You will review agent runs, tool calls, model usage, token consumption, and errors, then drill into an individual end-to-end transaction to follow a single orchestrated request across the orchestrator, the A2A sub-agents, the MCP server, and the audit API. By the end of this part you should be able to answer, from Application Insights alone:
 
 - Which agents ran, how often, and how many failed
 - Which tools each agent called and what those calls returned
@@ -16,6 +13,8 @@ Turn the telemetry wiring from Part 1 into practical insight. By the end of this
 - What the orchestrator actually did during A2A routing, rather than what it claimed it did
 
 > **Workshop disclaimer:** The audit data and remediation actions are simulated. Observability findings in this part describe the workshop proof of concept only.
+
+**Diagram color:** see note — this part spans all four colors (Purple, Green, Blue, Orange) because it observes the components built in Parts 1–4 rather than adding new ones.
 
 ## Prerequisites
 

@@ -1,9 +1,21 @@
-# Part 1 — Microsoft Foundry Foundation Setup
+# Part 1: Microsoft Foundry Foundation Setup
 
 [Final Architecture Diagram](./final-architecture.svg)
 
-### What you will do
-In this part, you will establish the workshop foundation by creating the resource group and a shared Application Insights instance for end-to-end telemetry, provisioning Foundry and core services, loading the shared corpus, configuring Foundry IQ, and creating the policy-audit-info-agent for grounded policy and audit responses. Color alignment: Purple.
+## Objective
+
+Establish the workshop foundation by creating the resource group `rg-agent-ws-mx01` and a shared Application Insights instance (`appi-agentapp-<initials>-mx01`) for end-to-end telemetry, provisioning Microsoft Foundry and its `main-project`, deploying a chat model, loading the shared policy-and-audit corpus into Azure Blob Storage, configuring Foundry IQ over that corpus, and creating the `policy-audit-info-agent` for grounded policy and audit responses.
+
+**Diagram color:** Purple — Foundry foundation and grounded policy agent.
+
+## Prerequisites
+
+- An Azure subscription with permission to **create resources and assign RBAC roles** on the Foundry resource and storage account
+- Model quota for a **GPT 5.2 or higher** deployment (GPT-5.4 recommended)
+- [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli) (`az`), logged in via `az login`
+- [PowerShell 7+](https://learn.microsoft.com/powershell/scripting/install/installing-powershell)
+
+---
 
 ## 1) Create the resource group and Application Insights
 

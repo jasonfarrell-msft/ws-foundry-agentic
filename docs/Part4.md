@@ -1,15 +1,14 @@
 # Part 4: Hosted Remediation Agent
- 
-[Final Architecture Diagram](./final-architecture.svg)
 
-### What you will do
-In this part, you will configure and publish the hosted remediation agent, grant and verify runtime/A2A access, integrate it into the orchestrator, and validate an approval-gated remediation workflow with post-change status verification. Color alignment: Orange.
+[Final Architecture Diagram](./final-architecture.svg)
 
 ## Objective
 
-Extend the Part 3 prompt orchestrator with a hosted C# agent that performs a bounded, approved remediation against the same MCP-backed audit service used by `audit-status-agent`.
+Extend the Part 3 prompt orchestrator with a hosted C# agent (`remediation-hosted-agent`) that performs a bounded, approved remediation against the same MCP-backed audit service used by `audit-status-agent`. You will configure and publish the hosted agent, grant and verify its runtime and A2A access, integrate it into the orchestrator as a third A2A connection, and validate an approval-gated remediation workflow with post-change status verification.
 
 > **Workshop disclaimer:** This is a conceptual proof of concept. The data and remediation actions are simulated for learning. This workshop does not provide legal advice, certify regulatory compliance, or replace human review and production authorization controls.
+
+**Diagram color:** Orange — hosted remediation agent and approval gate.
 
 ## Prerequisites
 
@@ -24,6 +23,8 @@ Parts 1–3 must be complete:
 > **Observability:** The hosted remediation agent inherits the project-level Application Insights connection from Part 1. Its runs, MCP tool calls, and the resulting audit updates are traceable end to end in `appi-agentapp-<initials>-mx01`.
 
 The hosted agent in this part is a remediation specialist. All user requests continue to enter through `orchestrator-prompt-agent`.
+
+---
 
 ## 1) Retrieve the MCP server URL
 

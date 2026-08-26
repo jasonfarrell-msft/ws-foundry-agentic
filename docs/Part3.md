@@ -1,21 +1,19 @@
 # Part 3: Agent-to-Agent (A2A) Orchestration with a Prompt Orchestrator
- 
-[Final Architecture Diagram](./final-architecture.svg)
 
-### What you will do
-In this part, you will enable A2A for the existing specialist agents, create and configure the orchestrator prompt agent, wire A2A connections, and validate routing across status, policy, mixed, and out-of-scope requests. Color alignment: Blue.
+[Final Architecture Diagram](./final-architecture.svg)
 
 ## Objective
 
-Create a **prompt orchestrator agent in Foundry** that routes requests to two specialized sub-agents using **A2A**:
+Enable A2A for the two existing specialist agents, then create a **prompt orchestrator agent in Foundry** (`orchestrator-prompt-agent`) that routes requests to them over A2A, and validate routing across status, policy, mixed, and out-of-scope requests. This part focuses on prompt-agent orchestration only; **hosted remediation-agent deployment is intentionally deferred to Part 4.**
+
+The two sub-agents wired in this part are:
 
 - `audit-status-agent` for live compliance status
 - `policy-audit-info-agent` for policy and audit requirements
 
-This part focuses on prompt-agent orchestration only.
-**Hosted remediation-agent deployment is intentionally deferred to Part 4 (next module).**
+**Diagram color:** Blue — A2A orchestrator and routing.
 
-### Prerequisites & Assumptions
+## Prerequisites
 
 **Assumption: Parts 1 and 2 are complete.**
 

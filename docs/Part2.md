@@ -1,15 +1,18 @@
 # Part 2: Model Context Protocol (MCP) & Agent Integration
- 
+
 [Final Architecture Diagram](./final-architecture.svg)
 
-### What you will do
-In this part, you will deploy the audit API and MCP server, wire both into the shared Application Insights instance from Part 1, configure MCP tool descriptions, connect the `audit-status-agent` to MCP in Foundry, and validate end-to-end tool calls. Color alignment: Green.
+## Objective
 
-### Prerequisites & Assumptions
+Deploy the audit API and MCP server to Azure Container Apps, wire both into the shared Application Insights instance (`appi-agentapp-<initials>-mx01`) from Part 1, configure MCP tool descriptions in the C# source, connect the `audit-status-agent` to the MCP server in Foundry, and validate end-to-end tool calls from the Foundry playground.
+
+**Diagram color:** Green — MCP server and audit-status-agent.
+
+## Prerequisites
 
 **Assumption: Part 1 is complete.**
 - Foundry is deployed and running
-- A Foundry project exists with a model deployed
+- A Foundry project (`main-project`) exists with a model deployed
 - Application Insights `appi-agentapp-<initials>-mx01` exists and its connection string is available
 - PowerShell 7+ is available on your workstation
 
