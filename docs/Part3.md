@@ -4,14 +4,14 @@
 
 ## Objective
 
-Enable A2A for the two existing specialist agents, then create a **prompt orchestrator agent in Foundry** (`orchestrator-prompt-agent`) that routes requests to them over A2A, and validate routing across status, policy, mixed, and out-of-scope requests. This part focuses on prompt-agent orchestration only; **hosted remediation-agent deployment is intentionally deferred to Part 4.**
+Enable A2A on the two existing specialist agents, create `orchestrator-prompt-agent` to route requests to them, and validate routing across status, policy, mixed, and out-of-scope prompts. Hosted remediation is **intentionally deferred to Part 4.**
 
 The two sub-agents wired in this part are:
 
 - `audit-status-agent` for live compliance status
 - `policy-audit-info-agent` for policy and audit requirements
 
-**Why this matters:** Real compliance questions rarely respect system boundaries — "why are we non-compliant here, and what evidence does the regulation require?" needs both live status and regulatory interpretation, and the person asking should not have to know which system holds which answer. Orchestration puts one front door in front of both. Keeping the specialists separate and narrowly scoped is deliberate: each agent stays independently testable, and an orchestrator's routing decisions and tool calls are inspectable in a way that a single monolithic prompt is not. The scope gate matters for the same reason — it keeps the assistant from drifting into subjects where a confident wrong answer carries regulatory risk.
+**Why this matters:** Real compliance questions cross system boundaries — "why are we non-compliant, and what evidence does the regulation require?" needs both live status and regulatory interpretation, and the person asking should not have to know which system holds which answer. Orchestration puts one front door in front of both. Keeping the specialists narrowly scoped is deliberate: each stays independently testable, and routing decisions are inspectable in a way a single monolithic prompt is not.
 
 **Diagram color:** Blue — A2A orchestrator and routing.
 

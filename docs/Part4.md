@@ -4,11 +4,11 @@
 
 ## Objective
 
-Extend the Part 3 prompt orchestrator with a hosted C# agent (`remediation-hosted-agent`) that performs a bounded, approved remediation against the same MCP-backed audit service used by `audit-status-agent`. You will configure and publish the hosted agent, grant and verify its runtime and A2A access, integrate it into the orchestrator as a third A2A connection, and validate an approval-gated remediation workflow with post-change status verification.
+Publish a hosted C# agent (`remediation-hosted-agent`) that applies a bounded, approved remediation through the Part 2 MCP server, grant it runtime and A2A access, wire it into the orchestrator as a third connection, and validate the approval-gated workflow end to end.
 
 > **Workshop disclaimer:** This is a conceptual proof of concept. The data and remediation actions are simulated for learning. This workshop does not provide legal advice, certify regulatory compliance, or replace human review and production authorization controls.
 
-**Why this matters:** Advisory agents stop short of the work — someone still has to open the system and make the change, which is where delay and transcription errors enter. The value of letting an agent act is real, but so is the risk: an unbounded agent with write access to a compliance system of record is not acceptable in a regulated environment. This part demonstrates the control pattern that a production version of this workflow would need to build on: a narrowly scoped tool that can perform only one bounded update, an explicit human approval step between analysis and execution, a distinct managed identity for the hosted agent instead of reusing the orchestrator's or the operator's credentials, and a fresh verification read to show what actually changed.
+**Why this matters:** Advisory agents stop short of the work — someone still has to open the system and make the change, which is where delay and transcription errors enter. But an unbounded agent with write access to a compliance system of record is not acceptable in a regulated environment. This part shows the control pattern a production version would build on: a tool that can perform only one bounded update, a human approval step between analysis and execution, a distinct managed identity for the hosted agent, and a fresh read to show what actually changed.
 
 **Diagram color:** Orange — hosted remediation agent and approval gate.
 

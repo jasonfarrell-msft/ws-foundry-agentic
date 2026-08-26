@@ -4,9 +4,9 @@
 
 ## Objective
 
-Deploy the audit API and MCP server to Azure Container Apps, wire both into the shared Application Insights instance (`appi-agentapp-<initials>-mx01`) from Part 1, configure MCP tool descriptions in the C# source, connect the `audit-status-agent` to the MCP server in Foundry, and validate end-to-end tool calls from the Foundry playground.
+Deploy the audit API and MCP server to Azure Container Apps, wire both into the Part 1 Application Insights instance, document the MCP tool descriptions in the C# source, then connect `audit-status-agent` to the MCP server and validate its tool calls.
 
-**Why this matters:** A policy corpus is static, but compliance posture changes daily — findings open and close, ratings move, remediation slips. Connecting the agent to the audit system of record through MCP means status answers come from that system rather than from someone's recollection or the model's memory. MCP matters specifically because it is a standard tool interface: the same server exposes the same tools to a second agent in Part 4 with no server-side changes, which is how this pattern scales past a single pilot.
+**Why this matters:** A policy corpus is static, but compliance posture changes daily — findings open and close, ratings move, remediation slips. MCP connects the agent to the audit system of record, so status answers come from that system rather than from recollection or model memory. Because MCP is a standard tool interface, the same server serves a second agent in Part 4 with no server-side changes — that reuse is how the pattern scales past a pilot.
 
 **Diagram color:** Green — MCP server and audit-status-agent.
 

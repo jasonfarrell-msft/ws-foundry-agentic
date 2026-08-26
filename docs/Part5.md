@@ -4,7 +4,7 @@
 
 ## Objective
 
-Use the Application Insights **Agents (Preview)** blade on `appi-agentapp-<initials>-mx01` to inspect the telemetry produced by everything you built in Parts 1–4 and turn the telemetry wiring from Part 1 into practical insight. You will review agent runs, tool calls, model usage, token consumption, and errors, then drill into an individual end-to-end transaction to follow a single orchestrated request across the orchestrator, the A2A sub-agents, the MCP server, and the audit API. By the end of this part you should be able to answer, from Application Insights alone:
+Use the Application Insights **Agents (Preview)** blade to inspect the telemetry produced by everything you built in Parts 1–4, then trace a single orchestrated request across the orchestrator, the A2A sub-agents, the MCP server, and the audit API. By the end you should be able to answer, from Application Insights alone:
 
 - Which agents ran, how often, and how many failed
 - Which tools each agent called and what those calls returned
@@ -14,7 +14,7 @@ Use the Application Insights **Agents (Preview)** blade on `appi-agentapp-<initi
 
 > **Workshop disclaimer:** The audit data and remediation actions are simulated. Observability findings in this part describe the workshop proof of concept only.
 
-**Why this matters:** A multi-agent system is opaque by default — a fluent answer looks identical whether the agent consulted the system of record or fabricated the result from memory, and that ambiguity is precisely what makes stakeholders reluctant to rely on it. Traces replace trust with evidence: you can see which tool was called, which source was consulted, what the model cost, and where the request slowed down. That matters commercially, because token consumption is the cost model and multi-agent requests multiply it, so knowing where spend concentrates is what turns a pilot into a budget you can justify. In a compliance context, this kind of end-to-end trace is the raw material any future audit-grade evidence system would need to be built on. The workshop does not itself produce audit evidence; it shows you the substrate.
+**Why this matters:** A multi-agent system is opaque by default — a fluent answer looks identical whether the agent consulted the system of record or invented the result, and that ambiguity is what makes stakeholders reluctant to rely on it. Traces replace trust with evidence. They also expose cost: tokens are the cost model and multi-agent requests multiply them, so knowing where spend concentrates is what turns a pilot into a budget you can justify. The workshop does not produce audit evidence; it shows you the substrate a future evidence system would be built on.
 
 **Diagram color:** see note — this part spans all four colors (Purple, Green, Blue, Orange) because it observes the components built in Parts 1–4 rather than adding new ones.
 
