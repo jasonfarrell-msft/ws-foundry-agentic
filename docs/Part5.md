@@ -14,6 +14,8 @@ Use the Application Insights **Agents (Preview)** blade on `appi-agentapp-<initi
 
 > **Workshop disclaimer:** The audit data and remediation actions are simulated. Observability findings in this part describe the workshop proof of concept only.
 
+**Why this matters:** A multi-agent system is opaque by default — a fluent answer looks identical whether the agent consulted the system of record or fabricated the result from memory, and that ambiguity is precisely what makes stakeholders reluctant to rely on it. Traces replace trust with evidence: you can see which tool was called, which source was consulted, what the model cost, and where the request slowed down. That matters commercially, because token consumption is the cost model and multi-agent requests multiply it, so knowing where spend concentrates is what turns a pilot into a budget you can justify. In a compliance context, this kind of end-to-end trace is the raw material any future audit-grade evidence system would need to be built on. The workshop does not itself produce audit evidence; it shows you the substrate.
+
 **Diagram color:** see note — this part spans all four colors (Purple, Green, Blue, Orange) because it observes the components built in Parts 1–4 rather than adding new ones.
 
 ## Prerequisites

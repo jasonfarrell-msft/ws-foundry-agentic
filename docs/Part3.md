@@ -11,6 +11,8 @@ The two sub-agents wired in this part are:
 - `audit-status-agent` for live compliance status
 - `policy-audit-info-agent` for policy and audit requirements
 
+**Why this matters:** Real compliance questions rarely respect system boundaries — "why are we non-compliant here, and what evidence does the regulation require?" needs both live status and regulatory interpretation, and the person asking should not have to know which system holds which answer. Orchestration puts one front door in front of both. Keeping the specialists separate and narrowly scoped is deliberate: each agent stays independently testable, and an orchestrator's routing decisions and tool calls are inspectable in a way that a single monolithic prompt is not. The scope gate matters for the same reason — it keeps the assistant from drifting into subjects where a confident wrong answer carries regulatory risk.
+
 **Diagram color:** Blue — A2A orchestrator and routing.
 
 ## Prerequisites

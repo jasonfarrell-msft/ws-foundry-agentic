@@ -6,6 +6,8 @@
 
 Establish the workshop foundation by creating the resource group `rg-agent-ws-mx01` and a shared Application Insights instance (`appi-agentapp-<initials>-mx01`) for end-to-end telemetry, provisioning Microsoft Foundry and its `main-project`, deploying a chat model, loading the shared policy-and-audit corpus into Azure Blob Storage, configuring Foundry IQ over that corpus, and creating the `policy-audit-info-agent` for grounded policy and audit responses.
 
+**Why this matters:** Audit and compliance teams lose time when regulatory knowledge is scattered across documents and individual specialists, and an assistant that answers from general model knowledge is a liability in a regulated setting — a confident, unsupported claim about a requirement is worse than no answer. In this domain the cost of one wrong answer trusted by the wrong person dwarfs the cost of the tooling that would have caught it. Grounding the agent in a controlled corpus with citations and confidence ratings makes its answers reviewable and traceable back to source, which is the minimum bar before an assistant like this could be considered for any workflow that touches audit preparation. The telemetry and identity foundation you set up here is what makes every later part observable rather than a black box.
+
 **Diagram color:** Purple — Foundry foundation and grounded policy agent.
 
 ## Prerequisites
