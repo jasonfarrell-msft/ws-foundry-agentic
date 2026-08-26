@@ -35,6 +35,7 @@ flowchart LR
 - **A2A** connected the prompt orchestrator to the specialist agents.
 - **Human approval** controlled the transition from analysis to the simulated remediation update.
 - **Fresh verification** confirmed the changed status through `audit-status-agent`.
+- **Application Insights** captured agent runs, tool calls, model token usage, and end-to-end traces across every component.
 
 ## Next use cases to explore
 

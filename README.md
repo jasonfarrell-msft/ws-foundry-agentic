@@ -59,6 +59,7 @@ Complete these in order. Each part builds on the previous one.
 | 2 | [docs/Part2.md](docs/Part2.md) | Deploy the audit API and MCP server to Azure Container Apps, then build `audit-status-agent` on MCP tools |
 | 3 | [docs/Part3.md](docs/Part3.md) | Enable A2A on both agents, verify their agent cards, and create `orchestrator-prompt-agent` to route between them |
 | 4 | [docs/Part4.md](docs/Part4.md) | Publish the hosted C# `remediation-hosted-agent`, wire it as a third A2A connection, and validate the approval workflow |
+| 5 | [docs/Part5.md](docs/Part5.md) | Explore agent telemetry in the Application Insights **Agents (Preview)** blade and verify multi-agent routing at the trace level |
 | — | [docs/End.md](docs/End.md) | Recap and follow-on use cases |
 
 ## Prerequisites
@@ -90,7 +91,7 @@ Copy-paste content — agent instructions and validation prompts — appears in 
 ## Repository layout
 
 ```
-docs/                    Workshop guides (Part1-Part4, End)
+docs/                    Workshop guides (Part1-Part5, End)
 data/docs/               144-document policy and audit corpus for Foundry IQ
 src/api/                 Audit API (Python/FastAPI) — simulated compliance data
 src/mcp/                 MCP server (C#) — exposes audit tools to agents
