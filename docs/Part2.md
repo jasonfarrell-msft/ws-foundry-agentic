@@ -3,13 +3,14 @@
 [Final Architecture Diagram](./final-architecture.svg)
 
 ### What you will do
-In this part, you will deploy the audit API and MCP server, configure MCP tool descriptions, connect the `audit-status-agent` to MCP in Foundry, and validate end-to-end tool calls. Color alignment: Green.
+In this part, you will deploy the audit API and MCP server, wire both into the shared Application Insights instance from Part 1, configure MCP tool descriptions, connect the `audit-status-agent` to MCP in Foundry, and validate end-to-end tool calls. Color alignment: Green.
 
 ### Prerequisites & Assumptions
 
 **Assumption: Part 1 is complete.**
 - Foundry is deployed and running
 - A Foundry project exists with a model deployed
+- Application Insights `appi-agentapp-<initials>-mx01` exists and its connection string is available
 - PowerShell 7+ is available on your workstation
 
 If you need to set up Part 1 first, refer to `docs/Part1.md`.
@@ -41,6 +42,24 @@ Run the `scripts/setup-part2.ps1` script to deploy the audit API. The script han
 ```
 
 4. **Copy this URL** — you'll use it when configuring the MCP server.
+
+### Connect the Audit API to Application Insights
+
+Attach the shared Application Insights instance so audit API requests, dependencies, and failures land in the same telemetry store as Foundry.
+
+1. Retrieve the connection string from Part 1 (Application Insights → **Overview** → **Connection String**).
+2. Set it on the audit API container app:
+
+```powershell
+az containerapp update `
+    --name "aca-agentws-api-<initials>-lx01" `
+    --resource-group "rg-agent-ws-mx01" `
+    --set-env-vars "APPLICATIONINSIGHTS_CONNECTION_STRING=<APP_INSIGHTS_CONNECTION_STRING>"
+```
+
+3. Wait for the new revision to become active before continuing.
+
+> Do not commit the connection string. In production, store it in Azure Key Vault and reference it as a Container Apps secret.
 
 ---
 
@@ -97,6 +116,19 @@ Now deploy the MCP server to Azure Container Apps and capture its endpoint URL.
 ```
 
 3. **Copy this URL** — you'll use it when adding the MCP server connection in Foundry.
+
+### Connect the MCP server to Application Insights
+
+Wire the MCP server into the same Application Insights instance so tool-call traces correlate with the audit API and Foundry agent runs.
+
+```powershell
+az containerapp update `
+    --name "aca-agentws-mcp-<initials>-lx01" `
+    --resource-group "rg-agent-ws-mx01" `
+    --set-env-vars "APPLICATIONINSIGHTS_CONNECTION_STRING=<APP_INSIGHTS_CONNECTION_STRING>"
+```
+
+Wait for the new revision to become active before continuing.
 
 ---
 

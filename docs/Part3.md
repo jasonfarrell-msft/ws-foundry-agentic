@@ -21,7 +21,10 @@ This part focuses on prompt-agent orchestration only.
 
 - Foundry project exists and has a working model deployment
 - `audit-status-agent` and `policy-audit-info-agent` already exist
+- Application Insights `appi-agentapp-<initials>-mx01` is connected to the Foundry project (Part 1)
 - PowerShell 7+ is available
+
+> **Observability:** The orchestrator and both sub-agents inherit the project-level Application Insights connection configured in Part 1. Use that instance to inspect A2A routing traces when validating Section 4.
 
 ---
 

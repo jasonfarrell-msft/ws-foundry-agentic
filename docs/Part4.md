@@ -19,6 +19,9 @@ Parts 1–3 must be complete:
 - `audit-status-agent` uses the deployed audit MCP server.
 - `orchestrator-prompt-agent` can call both agents through A2A.
 - The audit API and MCP server from Part 2 are still running.
+- Application Insights `appi-agentapp-<initials>-mx01` is connected to the Foundry project and to the Part 2 container apps.
+
+> **Observability:** The hosted remediation agent inherits the project-level Application Insights connection from Part 1. Its runs, MCP tool calls, and the resulting audit updates are traceable end to end in `appi-agentapp-<initials>-mx01`.
 
 The hosted agent in this part is a remediation specialist. All user requests continue to enter through `orchestrator-prompt-agent`.
 

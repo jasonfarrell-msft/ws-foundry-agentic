@@ -3,9 +3,31 @@
 [Final Architecture Diagram](./final-architecture.svg)
 
 ### What you will do
-In this part, you will establish the workshop foundation by provisioning Foundry and core services, loading the shared corpus, configuring Foundry IQ, and creating the policy-audit-info-agent for grounded policy and audit responses. Color alignment: Purple.
+In this part, you will establish the workshop foundation by creating the resource group and a shared Application Insights instance for end-to-end telemetry, provisioning Foundry and core services, loading the shared corpus, configuring Foundry IQ, and creating the policy-audit-info-agent for grounded policy and audit responses. Color alignment: Purple.
 
-### 1) Create Microsoft Foundry resource and project
+## 1) Create the resource group and Application Insights
+
+Application Insights is created first so that every component you deploy or configure in Parts 1–4 can be wired into a single telemetry destination. This gives you unified tracing across Foundry, agents, the audit API, and the MCP server.
+
+- **Resource group:** `rg-agent-ws-mx01`
+- **Application Insights name:** `appi-agentapp-<initials>-mx01` — for example, `appi-agentapp-jrf-mx01`
+- **Region:** The region you will use for every other workshop resource
+
+1. Open the [Azure portal](https://portal.azure.com).
+2. Create a new resource group named **`rg-agent-ws-mx01`** in your chosen region.
+3. Search for **Application Insights** and select **+ Create**.
+4. On the **Basics** tab, set:
+    - **Subscription:** Your workshop subscription
+    - **Resource group:** `rg-agent-ws-mx01`
+    - **Name:** `appi-agentapp-<initials>-mx01`
+    - **Region:** The same region as the resource group and all other workshop resources
+    - **Resource mode:** **Workspace-based** (create a new Log Analytics workspace if prompted)
+5. Select **Review + create**, then **Create**, and wait for deployment to complete.
+6. Open the new Application Insights resource, go to **Overview**, and copy the **Connection String**.
+
+> **Keep this connection string handy.** You will attach it to Foundry in Section 2 and to the Container Apps components deployed in Part 2. Treat it as a secret: do not commit it to source control. In production, source it from Azure Key Vault or app configuration rather than pasting it inline.
+
+## 2) Create Microsoft Foundry resource and project
 
 Complete this section exactly in the Azure portal with fixed values:
 
@@ -15,17 +37,28 @@ Complete this section exactly in the Azure portal with fixed values:
 - **All other settings:** Use defaults
 
 1. Open the **Azure portal**.
-2. Create a new resource group named **`rg-agent-ws-mx01`**.
-3. Search for **Microsoft Foundry**, choose **Foundry** from the left nav and select **Create**.
-4. In the creation wizard:
+2. Search for **Microsoft Foundry**, choose **Foundry** from the left nav and select **Create**.
+3. In the creation wizard:
    - Select resource group: **`rg-agent-ws-mx01`**
    - Set the name to **`foundry-agent-ws-jrf-mx01`** (jrf is your initials)
    - Set the default project name to: **`main-project`**
    - Keep networking set to **Public**
    - Accept all other default settings
-5. Complete the wizard and wait for deployment to finish.
+4. Complete the wizard and wait for deployment to finish.
 
-## 2) Deploy a model
+### Connect Foundry observability to Application Insights
+
+Wire the Foundry project to the Application Insights instance created in Section 1 so agent runs, traces, and tool calls are captured centrally.
+
+1. In the Foundry portal, open **`main-project`**.
+2. Open the **Observability** (or **Tracing**) area from the left navigation.
+3. Select the option to connect Application Insights.
+4. Choose the existing resource **`appi-agentapp-<initials>-mx01`** in `rg-agent-ws-mx01`.
+5. Save the connection and confirm the project shows Application Insights as connected.
+
+> If your Foundry portal exposes this as a project **Connection**, add a new connection of type **Application Insights** and select the same resource. Every agent you build in Parts 1–4 inherits this project-level telemetry connection.
+
+## 3) Deploy a model
 
 1. In the Azure portal, navigate to resource group **`rg-agent-ws-mx01`**.
 2. Select the newly created **Microsoft Foundry** instance and open it to access the Foundry portal.
@@ -51,7 +84,7 @@ Once deployed, you will land on the **Model Playground** within Foundry. You can
 
 > Throughout the rest of this guide, references to deployment names mean "the chat-model deployment you created in this step." Use the actual deployment name from step 8 (e.g., `gpt-5.4-mini-deployment`).
 
-## 3) Prepare your data
+## 4) Prepare your data
 
 > Before creating the agent, you will provide the shared policy-and-audit corpus it will use for grounding. The storage account and uploaded documents give Foundry IQ a common evidence source for retrieval and reasoning in the later OGE audit and multi-agent exercises.
 
@@ -94,7 +127,7 @@ This script creates the `docs` container if needed and uploads all files from `d
 
 > **Security note:** Microsoft does not recommend using connection strings for Azure Storage connectivity. Connection strings contain shared keys that grant full access to the storage account and should never be committed to source control or shared. They are used here for workshop simplicity only and are not a production-grade practice. In production, use Managed Identity or Azure AD-based authentication instead.
 
-## 4) Configure Foundry IQ
+## 5) Configure Foundry IQ
 
 **Foundry IQ** is Microsoft Foundry's knowledge-grounding capability. It connects your agent to enterprise content so answers are grounded in your data with citations.
 
@@ -141,7 +174,7 @@ This allows Azure AI Search to call the embedding and chat model deployments use
 
 #### Assign Storage Blob Data Reader on the Storage Account container
 
-1. Open the storage account created in Section 3.
+1. Open the storage account created in Section 4.
 2. Select **Access control (IAM)**.
 3. Select **Add** → **Add role assignment**.
 4. Select the **Storage Blob Data Reader** role.
@@ -165,7 +198,7 @@ This allows Azure AI Search to read and index the workshop documents. Wait a few
     - **Retrieval instructions:** `Use only the connected corpus. Prioritize the most relevant policy/audit documents and sections that directly answer the question, preferring authoritative evidence with clear citation metadata. Do not use external sources.`
 7. Select **Add knowledge source**, then choose **Azure Blob Storage**. ONLY modify the fields listed below:
     - **Name:** `ks-azureblob-docs`
-    - **Storage account:** Select the storage account you created in Section 3.
+    - **Storage account:** Select the storage account you created in Section 4.
     - **Container name:** `docs`
     - **Content extraction mode:** `Standard`
 12. For **Embedding model,** deploy an instance of`text-embedding-3-small` using the **Browse more models** option
@@ -174,7 +207,7 @@ This allows Azure AI Search to read and index the workshop documents. Wait a few
 15. Select **Save knowledge base** to save your changes
 16. Refresh the knowledge base details page and confirm the **Knowledge source** status changes from **Creating** to **Active** before continuing.
 
-## 5) Create and configure the policy-audit-info-agent
+## 6) Create and configure the policy-audit-info-agent
 
 1. In the Foundry portal, open `main-project` and select **Build**.
 2. Select **Agents** from the left navigation.
@@ -209,7 +242,7 @@ If asked for an answer without citations or evidence, refuse and state that evid
 Your top priority is faithful, evidence-based retrieval behavior from the connected Foundry IQ knowledge base only.
 ```
 
-## 6) Verify the agent in the playground
+## 7) Verify the agent in the playground
 ### Questions the agent should answer from the corpus
 
 1. > What audit evidence should be collected to verify SPCC compliance at a compressor station?
