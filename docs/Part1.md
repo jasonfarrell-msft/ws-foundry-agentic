@@ -21,7 +21,7 @@ Stand up the workshop foundation: resource group, shared Application Insights fo
 
 ## 1) Create the resource group and Application Insights
 
-Application Insights is created first so that every component you deploy or configure in Parts 1–4 can send application traces to the same destination. Use its backing Log Analytics workspace for Foundry resource diagnostics as well. Each component still needs its own tracing configuration; creating Application Insights alone does not enable collection.
+Application Insights is created first so that every component you deploy or configure in Parts 1–4 can send application traces to the same destination. In Section 2, you add it as a connected resource on the Foundry project. Applications deployed in later parts still need their own tracing configuration.
 
 - **Resource group:** `rg-agent-ws-mx01`
 - **Application Insights name:** `appi-agentapp-<initials>-mx01` — for example, `appi-agentapp-jrf-mx01`
@@ -39,7 +39,7 @@ Application Insights is created first so that every component you deploy or conf
 5. Select **Review + create**, then **Create**, and wait for deployment to complete.
 6. Open the new Application Insights resource, go to **Overview**, and copy the **Connection String**.
 
-> **Keep this connection string handy.** In Section 2, you select this Application Insights resource in Foundry rather than paste its connection string. The Container Apps components deployed in Part 2 need their own exporter configuration. Do not commit connection strings to source control; supply configuration through Azure Key Vault-backed environment variables. Also note the **Log Analytics workspace** linked on the Application Insights **Overview** page; you will select that workspace for resource diagnostics.
+> **Keep this connection string handy for Part 2.** In Section 2, you select this Application Insights resource in Foundry rather than paste its connection string. The Container Apps components deployed in Part 2 need their own exporter configuration. Do not commit connection strings to source control; supply configuration through Azure Key Vault-backed environment variables.
 
 ## 2) Create Microsoft Foundry resource and project
 
@@ -62,64 +62,39 @@ Complete this section exactly in the Azure portal with fixed values:
 
 ### Connect Foundry observability to Application Insights
 
-There is no **Observability** tab to open in the new Foundry portal. Microsoft Learn documents a project connection that enables **server-side agent tracing**, plus separate configuration for application instrumentation and model resource diagnostics. Complete each applicable path below; there is no single switch that captures every interaction across a Foundry resource and all its clients.
+Add the Application Insights instance from Section 1 as a **connected resource** on **`main-project`**. This project-level connection enables Foundry's automatic server-side agent tracing. You do not need to install an SDK, paste a connection string, or configure resource diagnostic settings to make this connection.
 
-#### A. Connect the project and enable server-side agent traces
+#### Add Application Insights as a connected resource
 
-1. Sign in to [Microsoft Foundry](https://ai.azure.com), use the **new Foundry** experience (turn on **New Foundry** if the toggle is displayed), and open **`main-project`**.
-2. Select **Build**, then **Agents** in the left navigation.
-3. At the top of the Agents page, select **Traces**, then select **Connect** on the right.
-4. Select the existing Application Insights resource **`appi-agentapp-<initials>-mx01`** in `rg-agent-ws-mx01`, then select **Connect**. Wait for the success confirmation.
-5. If **Connect** is not displayed, use the documented alternative: **Manage** in the upper-right navigation → **Project details** → **Connected resources** → **Add connection** → **Application Insights**. Select the same existing resource and complete the connection.
-6. In **Manage** → **Project details** → **Connected resources**, confirm the connected resource has category **AppInsights** and points to your workshop Application Insights instance.
+1. Sign in to [Microsoft Foundry](https://ai.azure.com), use the **new Foundry** experience, and open **`main-project`**.
+2. On the toolbar, select **Manage**.
+3. In the left pane, select **Project details**.
+4. Select the **Connected resources** tab.
+5. Check whether a resource with category **AppInsights** is already listed. If it points to **`appi-agentapp-<initials>-mx01`**, the project connection is already configured; do not add a duplicate.
+6. If there is no Application Insights connection, select **Add connection**.
+7. In **Choose a connection**, select **Application Insights**.
+8. Select the existing resource **`appi-agentapp-<initials>-mx01`** in **`rg-agent-ws-mx01`**, then select **Connect** to complete the connection. Reuse the resource you created in Section 1 rather than creating another instance.
+9. Return to **Connected resources** and confirm that an **AppInsights** entry points to the intended workshop Application Insights resource. If an existing entry points elsewhere, correct the project's connection before continuing.
 
-Foundry automatically enables server-side tracing after the connection succeeds; no application code change is required for this path. It captures supported agent execution, model calls within those runs, and tool/retrieval operations visible to the service. It does not instrument the internals of a remote tool, your API, or your MCP server.
+After the connection succeeds, Foundry automatically enables server-side tracing for supported agents in this project; no agent application code change is required. This is a **project connected-resource configuration**, not a setting on the model deployment or an **Observability** tab. Repeat the connection setup for any additional Foundry project you use.
 
-> **Scope and availability:** The connection is per project, not a resource-wide setting. Repeat it for any other Foundry project you use. Microsoft Learn identifies tracing for prompt and hosted agents as generally available; workflow and external-agent tracing are preview features. Do not assume that standalone **Model Playground** calls or arbitrary direct model API calls become agent traces just because this connection exists.
+#### Verify telemetry in Application Insights
 
-Source: [Set up tracing in Microsoft Foundry](https://learn.microsoft.com/azure/foundry/observability/how-to/trace-agent-setup).
+Complete this check after deploying the model and creating the agent in Sections 3 and 6:
 
-#### B. Instrument application-side agent and model calls
+1. Run **`policy-audit-info-agent`** in the playground with a Section 7 question. Note the time of the run.
+2. Wait a few minutes for telemetry to arrive.
+3. In the **Azure portal**, open the connected **`appi-agentapp-<initials>-mx01`** Application Insights resource.
+4. Select **Agents (Preview)** in its navigation menu. Inspect the **Models** and **Tool Calls** tiles.
+5. Select **View Traces with Agent Runs**, find the run in the relevant time range, and open its **End-to-end transaction details** to inspect the agent, model, and tool steps reported for that run.
 
-For code you run locally or in Container Apps in later parts, the project connection is the destination, not the instrumentation. To capture the client side of agent calls, direct model calls, and custom tool execution:
+To read telemetry, you need **Log Analytics Reader** access on the connected Application Insights resource and appropriate access to its backing workspace. If the underlying tables are protected, also obtain **Privileged Monitoring Data Reader**. If the preview Agents view is unavailable, use Application Insights **Logs** to check the underlying telemetry. If no data appears, confirm the **AppInsights** connected resource, generate a new agent run, check the query time range and read permissions, and allow for ingestion delay.
 
-1. Configure an **Azure Monitor OpenTelemetry** exporter in each application process, targeting the same Application Insights resource. Supply `APPLICATIONINSIGHTS_CONNECTION_STRING` through secure runtime configuration, or use the Foundry SDK's documented project telemetry lookup. An environment variable alone does not install or initialize instrumentation.
-2. Enable the instrumentation appropriate to the SDK/framework **before creating clients or making calls**. Follow the language-specific [client-side tracing instructions](https://learn.microsoft.com/azure/foundry/observability/how-to/trace-agent-client-side). For example, the Python Foundry SDK requires `AZURE_EXPERIMENTAL_ENABLE_GENAI_TRACING=true` and `AIProjectInstrumentor().instrument()`; .NET and JavaScript have their own explicit opt-in settings.
-3. Instrument the model client actually in use. The Python Foundry instrumentor supports OpenAI **Responses** and **Conversations** calls; do not assume it covers a separate Chat Completions client or another framework. Use the matching [framework integration](https://learn.microsoft.com/azure/foundry/observability/how-to/trace-agent-framework) for those paths, and add custom spans around application/tool logic not covered automatically.
-4. Preserve **W3C trace context** across outbound agent and HTTP/tool calls so supported client, service, and tool spans correlate into an end-to-end trace. Exporting to the same resource alone does not correlate independent spans.
-5. For workshop verification that requires every instrumented request rather than sampled traces, configure the SDK/exporter's sampling to retain **100%** of traces and check that ingestion sampling, telemetry processors, and daily caps are not dropping data. Do not assume the SDK defaults retain everything. This increases ingestion cost and still does not provide a lossless audit-log guarantee. For production, deliberately choose the retention/sampling tradeoff rather than leaving a troubleshooting configuration enabled. See [Application Insights sampling guidance](https://learn.microsoft.com/azure/azure-monitor/app/opentelemetry-sampling).
+> **Scope:** This connection enables supported Foundry-hosted agent telemetry, including model and tool operations reported by those agent runs. It does not automatically instrument standalone Model Playground calls, arbitrary direct model API calls, or the internals of an external API/MCP server. Applications you deploy in later parts need their own [client-side instrumentation](https://learn.microsoft.com/azure/foundry/observability/how-to/trace-agent-client-side). Resource diagnostic logs in Log Analytics are not a substitute for the agent telemetry used by Application Insights visualizations.
 
-> **Preview and privacy:** The linked client-side GenAI instrumentation is currently documented as preview. Message-content recording is separate from tracing and is off by default in that SDK guidance. Leave it off for sensitive policy/audit data unless explicitly approved; enabling it can record prompts, model outputs, and tool arguments. Never put credentials or secrets in telemetry. Use managed identity for supported Azure authentication and least-privilege access to telemetry.
+> **Availability and data handling:** Microsoft Learn identifies prompt- and hosted-agent tracing as generally available; workflow and external-agent tracing, and the Application Insights **Agents (Preview)** view, are preview features. Traces can contain sensitive inputs, outputs, and tool data. Keep credentials out of telemetry, restrict read access, and review retention and ingestion costs.
 
-#### C. Collect resource-level model diagnostics, including playground traffic
-
-To monitor model requests independently of whether their caller is instrumented, configure diagnostic settings on the **Foundry resource**, not just the project. These resource logs complement agent traces; they do not create an end-to-end application trace or guarantee full prompt/response content.
-
-1. In the **Azure portal**, open **`foundry-agent-ws-<initials>-mx01`**.
-2. Select **Monitoring** → **Diagnostic settings** → **+ Add diagnostic setting**.
-3. Name the setting **`foundry-to-workshop-logs`**.
-4. Select the available **Request and Response Logs** (`RequestResponse`) and **Azure OpenAI Request Usage** categories for inference request/usage telemetry, plus **Audit Logs** for administrative activity. Category availability depends on the resource; select the categories exposed by your resource rather than treating a missing category as enabled.
-5. Select **AllMetrics** to export platform metrics.
-6. Under **Destination details**, select **Send to Log Analytics workspace** and choose the **same backing workspace** linked to **`appi-agentapp-<initials>-mx01`** in Section 1. Select **Save**.
-
-**Destination distinction:** Diagnostic settings send resource logs to **Log Analytics**, not directly into Application Insights request/dependency tables or Foundry's agent **Traces** view. Using the same workspace makes both data sets queryable together in Azure Monitor. Platform model metrics are also available in Azure Monitor without diagnostic settings; export them only when you need workspace queries. Review ingestion charges and retention for the selected categories.
-
-> **Diagnostic data can also be sensitive.** Review the records emitted by your enabled categories, workspace access, table permissions, and retention before using this configuration with regulated or confidential workloads. Do not assume that request/response diagnostics contain only harmless metadata.
-
-Sources: [Enable diagnostic logging for Microsoft Foundry](https://learn.microsoft.com/azure/foundry/how-to/diagnostic-logging) and [Monitor model deployments in Microsoft Foundry Models](https://learn.microsoft.com/azure/foundry/foundry-models/how-to/monitor-models#configure-diagnostic-settings).
-
-#### D. Verify collection after creating the model and agent
-
-Complete these checks after Sections 3 and 6; a connected resource alone is not evidence that telemetry is arriving.
-
-1. Ensure the person querying traces has **Log Analytics Reader** access on the connected Application Insights resource and appropriate access to its backing workspace. Protected tables additionally require **Privileged Monitoring Data Reader**. Configuring Foundry diagnostic settings requires **Monitoring Contributor** or equivalent permissions on the Foundry resource, plus access to the destination workspace.
-2. Run **`policy-audit-info-agent`** in the playground with one of the Section 7 questions. Note the time and response/conversation ID.
-3. Return to **Build** → **Agents** → **Traces**. Wait a few minutes and refresh. Open the new trace and inspect the model and Foundry IQ/tool spans, status, and duration. You can also inspect agent **Traces** and **Monitor** tabs; neither requires an **Observability** navigation tab.
-4. Open the workshop **Application Insights** resource in the Azure portal and select **Agents (Preview)** for the agent visualizations. Inspect the **Models** and **Tool Calls** tiles, then select **View Traces with Agent Runs** and open a trace's **End-to-end transaction details** to see its agent, model, and tool steps. This view requires agent telemetry using OpenTelemetry GenAI semantic conventions; sending resource diagnostic logs to the same workspace alone does not populate it. The dedicated Agents view is preview; use **Logs** or the available transaction diagnostics to investigate the underlying telemetry if the view is unavailable. See [Monitor AI agents with Application Insights](https://learn.microsoft.com/azure/azure-monitor/app/agents-view).
-5. Make a separate **Model Playground** request. In the backing **Log Analytics workspace** → **Logs**, check the Foundry resource's diagnostic records for that time and resource ID (for example, `AzureDiagnostics` with category `RequestResponse`, where that category is enabled). Check exported platform metrics in `AzureMetrics`. Resource diagnostic ingestion can take longer than agent traces; Microsoft Learn notes that initial diagnostic data can take up to **two hours**.
-6. When you add an instrumented application, make an agent call and a direct model call from that application and confirm both produce client spans in the same Application Insights instance. Check trace correlation across supported boundaries rather than assuming the server-side check covers application telemetry.
-
-If data is absent, check the selected project/resource/workspace, generate fresh traffic after enabling collection, verify query time range and RBAC, and check exporter initialization, sampling/caps, and network access to ingestion endpoints. Do not mark observability complete until each traffic path you actually use has produced telemetry.
+Microsoft Learn references: [Configure monitoring through Connected resources](https://learn.microsoft.com/azure/foundry/control-plane/monitoring-across-fleet#configure-monitoring), [Use the project details connection path](https://learn.microsoft.com/azure/foundry/observability/how-to/trace-agent-setup#use-the-project-details-connection-path), and [Monitor AI agents with Application Insights](https://learn.microsoft.com/azure/azure-monitor/app/agents-view).
 
 ## 3) Deploy a model
 
@@ -307,7 +282,7 @@ Your top priority is faithful, evidence-based retrieval behavior from the connec
 
 ## 7) Verify the agent in the playground
 
-After running the questions below, complete the [telemetry verification checks in Section 2](#d-verify-collection-after-creating-the-model-and-agent). A grounded answer confirms agent behavior, not that its telemetry reached Application Insights.
+After running the questions below, complete the [telemetry verification check in Section 2](#verify-telemetry-in-application-insights). A grounded answer confirms agent behavior, not that its telemetry reached Application Insights.
 
 ### Questions the agent should answer from the corpus
 
